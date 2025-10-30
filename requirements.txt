@@ -2,4 +2,5 @@ pyobjc-core; sys_platform == "darwin"
 pyobjc-framework-Cocoa; sys_platform == "darwin"
 pyobjc-framework-CoreBluetooth; sys_platform == "darwin"
 bluezero; sys_platform == "linux"
+dbus-python; sys_platform == "linux"
 qrcode
