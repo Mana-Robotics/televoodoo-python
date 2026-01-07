@@ -28,6 +28,7 @@ CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
 CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
 CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
+CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 
 
 class PeripheralDelegate(NSObject):
@@ -99,11 +100,19 @@ class PeripheralDelegate(NSObject):
             None,
             CBAttributePermissionsWriteable,
         )
+        # Command (Write)
+        cmd_props = CBCharacteristicPropertyWrite | CBCharacteristicPropertyWriteWithoutResponse
+        cmd_char = CBMutableCharacteristic.alloc().initWithType_properties_value_permissions_(
+            CBUUID.UUIDWithString_(CHAR_COMMAND_UUID),
+            cmd_props,
+            None,
+            CBAttributePermissionsWriteable,
+        )
 
         service = CBMutableService.alloc().initWithType_primary_(
             CBUUID.UUIDWithString_(SERVICE_UUID), True
         )
-        service.setCharacteristics_([ctrl_char, auth_char, pose_char, heartbeat_char])
+        service.setCharacteristics_([ctrl_char, auth_char, pose_char, heartbeat_char, cmd_char])
         self.pm.addService_(service)
 
         # Start advertising
@@ -195,6 +204,31 @@ class PeripheralDelegate(NSObject):
                                 pass
                     except Exception as e:
                         msg = {"type": "error", "message": f"pose json: {e}"}
+                        print(json.dumps(msg), flush=True)
+                        if self._cb:
+                            try:
+                                self._cb(msg)
+                            except Exception:
+                                pass
+                elif uuid == CHAR_COMMAND_UUID:
+                    js = bytes(data).decode("utf-8")
+                    try:
+                        cmd_data = json.loads(js)
+                        # Handle supported commands: recording, keep_recording
+                        if "recording" in cmd_data:
+                            msg = {"type": "command", "name": "recording", "value": bool(cmd_data["recording"])}
+                        elif "keep_recording" in cmd_data:
+                            msg = {"type": "command", "name": "keep_recording", "value": bool(cmd_data["keep_recording"])}
+                        else:
+                            msg = {"type": "command", "data": cmd_data}
+                        print(json.dumps(msg), flush=True)
+                        if self._cb:
+                            try:
+                                self._cb(msg)
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        msg = {"type": "error", "message": f"command json: {e}"}
                         print(json.dumps(msg), flush=True)
                         if self._cb:
                             try:

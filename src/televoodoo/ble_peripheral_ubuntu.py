@@ -17,6 +17,7 @@ CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
 CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
 CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
+CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 
 
 _evt_cb: Optional[Callable[[Dict[str, Any]], None]] = None
@@ -65,6 +66,7 @@ class UbuntuPeripheral:
         self.auth_id = 2
         self.ctrl_id = 3
         self.pose_id = 4
+        self.cmd_id = 5
 
         self.ble.add_service(srv_id=self.srv_id, uuid=SERVICE_UUID, primary=True)
 
@@ -113,6 +115,17 @@ class UbuntuPeripheral:
             write_callback=self._pose_write,
         )
 
+        # Command (write)
+        self.ble.add_characteristic(
+            srv_id=self.srv_id,
+            chr_id=self.cmd_id,
+            uuid=CHAR_COMMAND_UUID,
+            value=[],
+            notifying=False,
+            flags=['write', 'write-without-response'],
+            write_callback=self._command_write,
+        )
+
     # Callbacks
     def _hb_read(self) -> list[int]:
         b = struct.pack('<I', self.heartbeat_counter)
@@ -153,6 +166,24 @@ class UbuntuPeripheral:
                 emit_event({"type": "error", "message": f"pose json: {e}"})
         except Exception as e:
             emit_event({"type": "error", "message": f"pose write: {e}"})
+
+    def _command_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
+        try:
+            buf = bytes(value) if not isinstance(value, (bytes, bytearray)) else value
+            js = buf.decode('utf-8')
+            try:
+                cmd_data = json.loads(js)
+                # Handle supported commands: recording, keep_recording
+                if "recording" in cmd_data:
+                    emit_event({"type": "command", "name": "recording", "value": bool(cmd_data["recording"])})
+                elif "keep_recording" in cmd_data:
+                    emit_event({"type": "command", "name": "keep_recording", "value": bool(cmd_data["keep_recording"])})
+                else:
+                    emit_event({"type": "command", "data": cmd_data})
+            except Exception as e:
+                emit_event({"type": "error", "message": f"command json: {e}"})
+        except Exception as e:
+            emit_event({"type": "error", "message": f"command write: {e}"})
 
     def _hb_loop(self) -> None:
         while True:
