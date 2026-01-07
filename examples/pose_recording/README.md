@@ -36,6 +36,12 @@ With a JSON config for pose transformation:
 python examples/pose_recording/pose_recording.py --config examples/output_poller/voodoo_settings.json
 ```
 
+Use static BLE credentials for testing or automation:
+
+```bash
+python examples/pose_recording/pose_recording.py --name mydevice --code ABC123
+```
+
 #### BLE Peripheral Mode (macOS/Ubuntu)
 
 Start a BLE peripheral that advertises the Voodoo Control service. The program will:
@@ -153,6 +159,8 @@ Example console output:
 | `--output-dir DIR` | Directory to save recordings (default: current directory) |
 | `--sim` | Use simulation mode instead of BLE |
 | `--duration N` | Auto-exit after N seconds |
+| `--name NAME` | Static BLE peripheral name (default: randomly generated) |
+| `--code CODE` | Static authentication code (default: randomly generated) |
 
 #### Integration Example
 

@@ -8,12 +8,24 @@ from televoodoo.transform import OutputConfig, PoseTransformer
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Televoodoo BLE peripheral")
     parser.add_argument("--config", type=str, default="")
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Static BLE peripheral name (default: randomly generated)",
+    )
+    parser.add_argument(
+        "--code",
+        type=str,
+        default=None,
+        help="Static authentication code (default: randomly generated 6-char code)",
+    )
     args = parser.parse_args()
 
     # start BLE peripheral and print session + QR automatically
-    start_peripheral()
+    start_peripheral(name=args.name, code=args.code)
 
     config = OutputConfig(
         includeFormats={

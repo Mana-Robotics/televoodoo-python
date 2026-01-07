@@ -169,6 +169,18 @@ def main() -> int:
         default=None,
         help="Auto-exit after N seconds",
     )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default=None,
+        help="Static BLE peripheral name (default: randomly generated)",
+    )
+    parser.add_argument(
+        "--code",
+        type=str,
+        default=None,
+        help="Static authentication code (default: randomly generated 6-char code)",
+    )
     args = parser.parse_args()
 
     # Build transformer from config
@@ -256,7 +268,7 @@ def main() -> int:
                     recorder.keep_recording(bool(cmd_value))
 
         try:
-            start_peripheral(on_ble_event, quiet=True)
+            start_peripheral(on_ble_event, quiet=True, name=args.name, code=args.code)
         except Exception as e:
             print(
                 json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}),

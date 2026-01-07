@@ -12,6 +12,36 @@ This package provides:
 
 Examples with corresponding usage instructions are available under `python/televoodoo/examples/`.
 
+### BLE Credentials
+
+By default, the BLE peripheral generates random credentials on each launch. For testing or automation, you can specify static credentials:
+
+```bash
+# Using the console entry
+televoodoo --name mydevice --code ABC123
+
+# Or in examples
+python examples/pose_logger/pose_logger.py --name mydevice --code ABC123
+python examples/pose_recording/pose_recording.py --name mydevice --code ABC123
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name` | Static BLE peripheral name (default: randomly generated `prsntrXX`) |
+| `--code` | Static authentication code (default: randomly generated 6-char code) |
+
+You can also use these programmatically:
+
+```python
+from televoodoo.ble import start_peripheral
+
+# Use static credentials
+start_peripheral(callback=my_handler, name="mydevice", code="ABC123")
+
+# Or mix (e.g., static name, random code)
+start_peripheral(callback=my_handler, name="mydevice")
+```
+
 ### Install into a Python venv (recommended)
 
 From the `python/televoodoo/` folder:

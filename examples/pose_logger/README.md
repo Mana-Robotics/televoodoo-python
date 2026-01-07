@@ -30,6 +30,12 @@ Optionally provide a JSON config (same format saved by the app):
 python examples/pose_logger/pose_logger.py --config examples/output_poller/voodoo_settings.json
 ```
 
+Use static BLE credentials for testing or automation:
+
+```bash
+python examples/pose_logger/pose_logger.py --name mydevice --code ABC123
+```
+
 #### BLE peripheral mode (macOS)
 
 Start a BLE peripheral that advertises the Voodoo Control service. This prints a session name and code, runs a service heartbeat, and blocks in the CoreBluetooth run loop. Requires macOS and `pyobjc` (already listed in `python/requirements.txt`). This is the default mode.

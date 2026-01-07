@@ -54,13 +54,25 @@ def _print_session_and_qr(name: str, code: str) -> None:
         pass
 
 
-def start_peripheral(callback: Optional[Callable[[Dict[str, Any]], None]] = None, quiet: bool = False) -> None:
+def start_peripheral(
+    callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    quiet: bool = False,
+    name: Optional[str] = None,
+    code: Optional[str] = None,
+) -> None:
     """Generate a session and start the platform BLE peripheral.
 
     When quiet=True, suppress only high-frequency event prints (pose, heartbeat),
     but still print the session/QR and connection status messages needed by the app.
+
+    If name and/or code are provided, they will be used instead of randomly generated values.
+    This is useful for testing or when you want consistent connection parameters.
     """
-    name, code = generate_session()
+    # Use provided credentials or generate random ones
+    if name is None or code is None:
+        gen_name, gen_code = generate_session()
+        name = name or gen_name
+        code = code or gen_code
     # Always print session/QR so clients can connect
     _print_session_and_qr(name, code)
 
