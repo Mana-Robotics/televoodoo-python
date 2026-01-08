@@ -1,0 +1,31 @@
+{
+    "ble": {
+      "name": "myrobot",
+      "code": "ABC123"
+    },
+    "includeFormats": {
+      "absolute_input": true,
+      "delta_input": false,
+      "absolute_transformed": true,
+      "delta_transformed": true
+    },
+    "includeOrientation": {
+      "quaternion": true,
+      "euler_radian": false,
+      "euler_degree": true
+    },
+    "scale": 1.0,
+    "outputAxes": {
+      "x": 1,
+      "y": 1,
+      "z": -1
+    },
+    "targetFrameDegrees": {
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.5,
+      "x_rot_deg": 0,
+      "y_rot_deg": 0,
+      "z_rot_deg": 90
+    }
+  }

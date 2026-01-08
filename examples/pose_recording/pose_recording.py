@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from televoodoo import Pose, PoseTransformer
+from televoodoo import Pose, PoseTransformer, load_config
 from televoodoo.ble import run_simulation, start_peripheral
 
 
@@ -184,7 +184,7 @@ def main() -> int:
     args = parser.parse_args()
 
     # Build transformer from config
-    cfg = PoseTransformer.load_config(args.config)
+    cfg = load_config(args.config)
     transformer = PoseTransformer(cfg)
 
     # Create recorder
@@ -229,7 +229,7 @@ def main() -> int:
                 ai = evt.get("data", {}).get("absolute_input", {})
                 try:
                     pose = Pose(
-                        pose_start=bool(ai.get("pose_start", False)),
+                        movement_start=bool(ai.get("movement_start", False)),
                         x=float(ai.get("x", 0.0)),
                         y=float(ai.get("y", 0.0)),
                         z=float(ai.get("z", 0.0)),
@@ -268,7 +268,10 @@ def main() -> int:
                     recorder.keep_recording(bool(cmd_value))
 
         try:
-            start_peripheral(on_ble_event, quiet=True, name=args.name, code=args.code)
+            # CLI args override config file; config file overrides random
+            ble_name = args.name or cfg.ble_name
+            ble_code = args.code or cfg.ble_code
+            start_peripheral(on_ble_event, quiet=True, name=ble_name, code=ble_code)
         except Exception as e:
             print(
                 json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}),

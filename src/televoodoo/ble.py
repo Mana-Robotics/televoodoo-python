@@ -11,7 +11,7 @@ from .pose import Pose
 
 def generate_session() -> tuple[str, str]:
     suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=2))
-    name = f"prsntr{suffix}"
+    name = f"voodoo{suffix}"
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     return name, code
 
@@ -21,7 +21,7 @@ def simulate_pose_stream() -> Iterator[Pose]:
     while True:
         t += 0.05
         yield Pose(
-            pose_start=True,
+            movement_start=True,
             x=0.1 * random.uniform(-1, 1),
             y=0.1 * random.uniform(-1, 1),
             z=0.1 * random.uniform(-1, 1),

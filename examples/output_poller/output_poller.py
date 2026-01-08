@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from televoodoo import Pose, PoseTransformer
+from televoodoo import Pose, PoseTransformer, load_config
 from televoodoo.ble import generate_session, start_peripheral
 
 
@@ -19,7 +19,7 @@ def main() -> int:
     # start_peripheral prints session + QR and starts BLE
 
     # Load config and create transformer
-    voodoo_config = PoseTransformer.load_config(args.config)
+    voodoo_config = load_config(args.config)
     voodoo_transformer = PoseTransformer(voodoo_config)
 
     # Shared latest pose
@@ -33,7 +33,7 @@ def main() -> int:
             ai = evt.get("data", {}).get("absolute_input", {})
             try:
                 pose = Pose(
-                    pose_start=bool(ai.get("pose_start", False)),
+                    movement_start=bool(ai.get("movement_start", False)),
                     x=float(ai.get("x", 0.0)),
                     y=float(ai.get("y", 0.0)),
                     z=float(ai.get("z", 0.0)),
@@ -85,7 +85,13 @@ def main() -> int:
         signal.signal(signal.SIGTERM, lambda *_: stop_run_loop())
 
     try:
-        start_peripheral(evt_cb, quiet=True)
+        # Use BLE credentials from config if specified
+        start_peripheral(
+            evt_cb,
+            quiet=True,
+            name=voodoo_config.ble_name,
+            code=voodoo_config.ble_code
+        )
     except Exception as e:
         print(json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}), flush=True)
     return 0

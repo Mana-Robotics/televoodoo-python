@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Pose:
-    pose_start: bool
+    movement_start: bool
     x: float
     y: float
     z: float

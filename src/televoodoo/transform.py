@@ -1,108 +1,19 @@
+"""Pose transformation logic for Televoodoo."""
+
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import Dict, Any, Optional, Tuple
-from pathlib import Path
-import json
+from typing import Dict, Any, Tuple
 import math
+
 from .pose import Pose
-
-
-@dataclass
-class OutputConfig:
-    includeFormats: Dict[str, bool]
-    includeOrientation: Dict[str, bool]
-    scale: float
-    outputAxes: Dict[str, float]
-    # Pose of Target Coordinate System relative to reference/world (Euler radians)
-    targetFrame: Optional[Dict[str, float]] = None
+from .config import OutputConfig
 
 
 class PoseTransformer:
+    """Transforms raw pose data according to an OutputConfig."""
+
     def __init__(self, config: OutputConfig) -> None:
         self.config = config
         self._origin: Pose | None = None
-
-    @classmethod
-    def load_config(cls, path: Optional[str]) -> OutputConfig:
-        """Load an OutputConfig from a JSON file.
-
-        If path is None or empty, returns a default config.
-        Relative paths are resolved by trying:
-        - current working directory
-        - next to the calling script (__file__ of Televoodoo)
-        - next to this module file (transform.py)
-        """
-        if not path:
-            return OutputConfig(
-                includeFormats={
-                    "absolute_input": True,
-                    "delta_input": False,
-                    "absolute_transformed": True,
-                    "delta_transformed": False,
-                },
-                includeOrientation={
-                    "quaternion": True,
-                    "euler_radian": False,
-                    "euler_degree": False,
-                },
-                scale=1.0,
-                outputAxes={"x": 1.0, "y": 1.0, "z": 1.0},
-            )
-
-        p = Path(path)
-        if not p.is_absolute() and not p.exists():
-            # Try relative to the importing script if available (runtime dependent)
-            try:
-                import __main__  # type: ignore
-                main_file = getattr(__main__, "__file__", None)
-                if isinstance(main_file, str):
-                    alt = Path(main_file).parent.joinpath(path)
-                    if alt.exists():
-                        p = alt
-            except Exception:
-                pass
-        if not p.is_absolute() and not p.exists():
-            # Try relative to this module file
-            alt2 = Path(__file__).parent.joinpath(path)
-            if alt2.exists():
-                p = alt2
-
-        data: Dict[str, Any] = json.loads(p.read_text())
-
-        tf_deg = data.get("targetFrameDegrees")
-        targetFrame = None
-        if tf_deg:
-            targetFrame = {
-                "x": float(tf_deg.get("x", 0.0)),
-                "y": float(tf_deg.get("y", 0.0)),
-                "z": float(tf_deg.get("z", 0.0)),
-                "x_rot": math.radians(float(tf_deg.get("x_rot_deg", 0.0))),
-                "y_rot": math.radians(float(tf_deg.get("y_rot_deg", 0.0))),
-                "z_rot": math.radians(float(tf_deg.get("z_rot_deg", 0.0))),
-            }
-        else:
-            tf = data.get("targetFrame")
-            if tf:
-                targetFrame = tf
-
-        return OutputConfig(
-            includeFormats=data.get(
-                "includeFormats",
-                {
-                    "absolute_input": True,
-                    "delta_input": False,
-                    "absolute_transformed": True,
-                    "delta_transformed": False,
-                },
-            ),
-            includeOrientation=data.get(
-                "includeOrientation",
-                {"quaternion": True, "euler_radian": False, "euler_degree": False},
-            ),
-            scale=float(data.get("scale", 1.0)),
-            outputAxes=data.get("outputAxes", {"x": 1.0, "y": 1.0, "z": 1.0}),
-            targetFrame=targetFrame,
-        )
 
     @staticmethod
     def _quat_multiply(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
@@ -160,11 +71,11 @@ class PoseTransformer:
         return value * float(self.config.scale)
 
     def transform(self, pose: Pose) -> Dict[str, Any]:
-        if self._origin is None and pose.pose_start:
+        if self._origin is None and pose.movement_start:
             self._origin = pose
 
         absolute_input = {
-            "pose_start": pose.pose_start,
+            "movement_start": pose.movement_start,
             "x": pose.x,
             "y": pose.y,
             "z": pose.z,
@@ -273,5 +184,3 @@ class PoseTransformer:
         if self.config.includeFormats.get("delta_transformed") and delta_transformed is not None:
             result["delta_transformed"] = delta_transformed
         return result
-
-

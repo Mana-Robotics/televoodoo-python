@@ -4,7 +4,8 @@ import sys
 import threading
 import time
 from televoodoo.ble import run_simulation, start_peripheral
-from televoodoo.transform import OutputConfig, PoseTransformer
+from televoodoo.config import OutputConfig
+from televoodoo.transform import PoseTransformer
 
 
 def main() -> int:

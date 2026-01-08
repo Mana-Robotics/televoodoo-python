@@ -98,7 +98,7 @@ Saved recordings are stored as JSON files with the following structure:
 
 ```json
 {
-  "session_name": "prsntrXY",
+  "session_name": "voodooXY",
   "recording_start": "2025-01-07T14:30:00.123456",
   "recording_end": "2025-01-07T14:31:30.654321",
   "pose_count": 450,
@@ -107,7 +107,7 @@ Saved recordings are stored as JSON files with the following structure:
       "timestamp": "2025-01-07T14:30:00.150000",
       "pose": {
         "absolute_input": {
-          "pose_start": true,
+          "movement_start": true,
           "x": 0.1,
           "y": 0.2,
           "z": 0.05,
@@ -127,7 +127,7 @@ Saved recordings are stored as JSON files with the following structure:
 
 Files are named using the pattern: `{session_name}_{YYYYMMDD_HHMMSS}.json`
 
-Example: `prsntrXY_20250107_143000.json`
+Example: `voodooXY_20250107_143000.json`
 
 #### Console Output Events
 
@@ -148,7 +148,7 @@ Example console output:
 {"type": "pose_logged", "recording": true, "recorded_count": 1, "pose": {...}}
 {"type": "pose_logged", "recording": true, "recorded_count": 2, "pose": {...}}
 {"type": "recording_stopped", "pose_count": 450}
-{"type": "recording_saved", "filename": "./recordings/prsntrXY_20250107_143000.json", "pose_count": 450}
+{"type": "recording_saved", "filename": "./recordings/voodooXY_20250107_143000.json", "pose_count": 450}
 ```
 
 #### Command-Line Options
@@ -165,11 +165,11 @@ Example console output:
 #### Integration Example
 
 ```python
-from televoodoo import Pose, PoseTransformer
+from televoodoo import Pose, PoseTransformer, load_config
 from pose_recording import PoseRecorder
 
 # Create transformer and recorder
-cfg = PoseTransformer.load_config("config.json")
+cfg = load_config("config.json")
 transformer = PoseTransformer(cfg)
 recorder = PoseRecorder(transformer, output_dir="./recordings")
 

@@ -1,4 +1,8 @@
 {
+  "ble": {
+    "name": "myrobot",
+    "code": "ABC123"
+  },
   "includeFormats": {
     "absolute_input": true,
     "delta_input": false,

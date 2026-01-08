@@ -44,7 +44,7 @@ Start a BLE peripheral that advertises the Voodoo Control service. This prints a
 python examples/pose_logger/pose_logger.py
 ```
 
-After starting, the program prints an ASCII QR code that encodes a JSON payload like `{"name":"prsntrXX","code":"ABC123"}` (see `SPECS/QR_CODE_READING_GUIDE.md`). Scan this to obtain the current peripheral name and access code.
+After starting, the program prints an ASCII QR code that encodes a JSON payload like `{"name":"voodooXX","code":"ABC123"}` (see `SPECS/QR_CODE_READING_GUIDE.md`). Scan this to obtain the current peripheral name and access code.
 
 You can then connect from a central and write pose JSON to the pose characteristic (UUID `1C8FD138-FC18-4846-954D-E509366AEF64`). The program logs BLE events and raw pose frames.
 
@@ -93,7 +93,7 @@ def on_pose(pose: Pose) -> None:
 
 - `includeFormats`
   - `absolute_input` (bool): include raw input pose data in output JSON.
-  - `delta_input` (bool): include delta of input position since first `pose_start`.
+  - `delta_input` (bool): include delta of input position since first `movement_start`.
   - `absolute_transformed` (bool): include scaled/axis-adjusted absolute values.
   - `delta_transformed` (bool): include scaled/axis-adjusted deltas.
 
@@ -107,7 +107,7 @@ def on_pose(pose: Pose) -> None:
 - `outputAxes` (object): per-axis multiplier to re-orient or flip axes, e.g. `{ "x": 1, "y": -1, "z": 1 }` to invert Y.
 
 Notes:
-- Deltas are computed relative to the first pose where `pose.pose_start` is `True`.
+- Deltas are computed relative to the first pose where `pose.movement_start` is `True`.
 - Euler values are passed through from input when enabled; if both `euler_radian` and `euler_degree` are true, both sets will be included if present in the input.
 
 #### JSON config format
