@@ -3,13 +3,22 @@ import json
 import signal
 import threading
 import time
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List
 
 from televoodoo import Pose
 from televoodoo.ble import run_simulation, start_peripheral
 
+# Directory where this script lives (for default output path)
+SCRIPT_DIR = Path(__file__).parent
+
 
 def main() -> int:
+    # Generate default filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    default_out = SCRIPT_DIR / f"pose_frequency_{timestamp}.png"
+
     parser = argparse.ArgumentParser(description="Measure pose input frequency and plot Δt between samples")
     parser.add_argument(
         "--sim",
@@ -25,8 +34,8 @@ def main() -> int:
     parser.add_argument(
         "--out",
         type=str,
-        default="pose_frequency.png",
-        help="Path to save the plot image (PNG)",
+        default=str(default_out),
+        help="Path to save the plot image (PNG). Default: example directory with timestamp",
     )
     args = parser.parse_args()
 
@@ -60,7 +69,7 @@ def main() -> int:
 
         def on_ble_event(evt: Dict[str, Any]) -> None:
             # mirror incoming events for context (optional)
-            # print(json.dumps(evt), flush=True)
+            print(json.dumps(evt), flush=True)
             if evt.get("type") == "pose":
                 observe_tick()
 
