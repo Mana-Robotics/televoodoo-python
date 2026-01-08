@@ -1,14 +1,14 @@
 # Televoodoo Python module
 
-Televoodoo lets you use your phone as a 6DoF controller for your Python project.
+**Televoodoo Python** enables your Python project to receive real-time **6DoF** pose data from any smartphone running the Televoodoo App — perfect for **Robot Teleoperation**, **3D object manipulation**, **VR motion control**, and more.
 
-> Note: The cross-platform app [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer) is based on this Python module and allows creating and visually testing config files for Televoodoo, which can then be loaded by Televoodoo Python in your projects.
 
-This package provides:
+### The Televoodoo Ecosystem
 
-- A small API with `Pose`, `OutputConfig`, and `PoseTransformer` to transform incoming pose samples into the JSON shapes used by the app/tools.
-- A BLE peripheral helper (`start_peripheral`) that advertises the Voodoo Control service and prints a session name + access code with an ASCII QR.
-- A simple pose simulator (`run_simulation`) for development without hardware.
+- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Create BLE peripherals for the Televoodoo App to connect to, with pose handling, coordinate transforms, and more
+- **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)**
+ (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via BLE
+- **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
 ## Installation
 
@@ -80,3 +80,10 @@ start_peripheral(callback=my_handler, name="mydevice", code="ABC123")
 start_peripheral(callback=my_handler, name="mydevice")
 ```
 
+## Maintainer
+
+Developed with ❤️ for 🤖 by [Mana Robotics](https://www.mana-robotics.com).
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
