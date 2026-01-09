@@ -81,7 +81,7 @@ Televoodoo Python creates the following BLE characteristics:
 {"keep_recording":false}
 ```
 
-## Pose Data Format
+## Pose Data Payload
 
 ### JSON Structure Received
 
@@ -143,45 +143,7 @@ Your callback function receives pose data in the following format:
 }
 ```
 
-## Using Televoodoo Python in Your Project
-
-### Basic Usage
-
-```python
-from televoodoo.ble import start_peripheral
-
-def my_pose_handler(pose_data):
-    """Called whenever new pose data arrives from the Televoodoo App"""
-    if pose_data.get('movement_start'):
-        print("🎯 New movement started — origin reset")
-    
-    print(f"Position: ({pose_data['x']:.3f}, {pose_data['y']:.3f}, {pose_data['z']:.3f})")
-    print(f"Rotation: ({pose_data['x_rot']:.1f}°, {pose_data['y_rot']:.1f}°, {pose_data['z_rot']:.1f}°)")
-    # Use the pose data in your application
-    # e.g., control a robot, manipulate 3D objects, etc.
-
-# Start the BLE peripheral
-start_peripheral(callback=my_pose_handler)
-```
-
-### With Static Credentials
-
-```python
-from televoodoo.ble import start_peripheral
-
-def my_pose_handler(pose_data):
-    # Your pose handling logic here
-    pass
-
-# Use static credentials for easier reconnection during development
-start_peripheral(
-    callback=my_pose_handler,
-    name="myvoodoo",
-    code="ABC123"
-)
-```
-
-### Connection Flow
+## Connection Flow
 
 1. **Your Python app starts**: Televoodoo Python creates a BLE peripheral
 2. **QR code displayed**: Shows connection info (peripheral name + access code)
@@ -191,100 +153,5 @@ start_peripheral(
 6. **Pose streaming begins**: Your callback receives real-time pose data
 7. **Your app processes**: Use the pose data for your application logic
 
-## Platform-Specific Implementation
 
-### macOS
-- Uses PyObjC and Core Bluetooth
-- Requires `pyobjc-core`, `pyobjc-framework-Cocoa`, `pyobjc-framework-CoreBluetooth`
-- Native performance and reliability
-
-### Ubuntu/Linux
-- Uses BlueZ via `bluezero` and D-Bus
-- Requires system packages: `libdbus-1-dev`, `libglib2.0-dev`, `python3-dev`
-- Ensure BlueZ service is running: `sudo systemctl status bluetooth`
-
-## Security Considerations
-
-### Access Codes
-- **Random by default**: Generated securely on each launch
-- **Static option available**: Use `--code` flag or parameter for development
-- **Short-lived**: Only valid during the peripheral's lifetime
-- **Simple authentication**: Prevents accidental connections
-
-### Best Practices
-- Use random codes in production for better security
-- Static codes are useful during development for frequent reconnections
-- The access code is displayed in the QR code and terminal output
-- No encryption is applied to the BLE data itself (use at your own risk in sensitive environments)
-
-## Troubleshooting
-
-### Common Issues
-
-**Peripheral not discoverable**
-- Ensure Bluetooth is enabled on your system
-- Check that no other app is using the same service UUID
-- On Linux, verify BlueZ service is running
-
-**Connection drops immediately**
-- Verify the access code matches
-- Ensure the Televoodoo App has Bluetooth permissions
-- Check system Bluetooth stability
-
-**No pose data received**
-- Verify your callback function is properly defined
-- Verify pose data is being received (check `movement_start` field)
-- Ensure the Televoodoo App has camera/tracking permissions
-
-### Debug Mode
-
-Run with verbose output to see connection events:
-
-```bash
-televoodoo --name mydevice --code ABC123
-```
-
-Monitor the terminal output for:
-- `🔐 Central [UUID] is now authenticated` - Successful authentication
-- Connection and disconnection events
-- Pose data reception confirmation
-
-## Advanced Usage
-
-### Coordinate Transforms
-
-Televoodoo Python includes utilities for coordinate system transformations:
-
-```python
-from televoodoo import PoseProvider, load_config
-
-# Load config with coordinate transforms
-config = load_config("robot_config.json")
-pose_provider = PoseProvider(config)
-
-def on_teleop_event(evt):
-    # Get transformed delta directly
-    delta = pose_provider.get_delta(evt)
-    if delta is None:
-        return
-    
-    # Use the transformed delta for robot control
-    control_robot(delta)
-```
-
-See the `examples/` directory for complete implementations.
-
-## Support
-
-For issues or questions:
-- Check the examples in `python/televoodoo/examples/`
-- Review the main README for installation troubleshooting
-- Ensure your Televoodoo App version is compatible
-- File issues on the [GitHub repository](https://github.com/Mana-Robotics/televoodoo-python)
-
-## Version Information
-
-- **API Version**: 1.0
-- **Last Updated**: January 2026
-- **Compatible with**: Televoodoo App (iOS/Android)
 

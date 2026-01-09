@@ -44,11 +44,14 @@ pip install -e .  # Editable install
 
 ```
 televoodoo/
-├── ble.py                    # Main entry point, start_peripheral()
+├── connection.py             # Main entry point, start_televoodoo()
+├── ble.py                    # BLE peripheral dispatcher
 ├── ble_peripheral_macos.py   # macOS Core Bluetooth implementation
 ├── ble_peripheral_ubuntu.py  # Linux BlueZ implementation
 ├── pose.py                   # Pose class and utilities
-└── transform.py              # Coordinate transformations
+├── pose_provider.py          # PoseProvider with get_delta() and get_absolute()
+├── config.py                 # OutputConfig and load_config()
+└── math.py                   # Coordinate transformations and quaternion math
 ```
 
 ### Key Components
@@ -176,7 +179,7 @@ Key considerations:
 ### Adding Platform Support
 
 1. Create `ble_peripheral_<platform>.py`
-2. Implement `start_peripheral()` with same signature
+2. Implement `run_<platform>_peripheral()` with same signature as existing implementations
 3. Add platform detection in `ble.py`
 4. Update `requirements.txt` if new dependencies
 5. Add to documentation

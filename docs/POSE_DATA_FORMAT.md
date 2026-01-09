@@ -16,8 +16,8 @@ Televoodoo Python receives 6DoF pose tracking data from the Televoodoo App via B
 
 ### Coordinate Convention
 - **X-axis**: Typically horizontal (right is positive)
-- **Y-axis**: Typically vertical (up is positive)
-- **Z-axis**: Typically depth (forward is positive)
+- **Y-axis**: Typically depth (forward is positive)
+- **Z-axis**: Typically vertical (up is positive)
 - **Units**: Meters for position, degrees for Euler angles
 - **Quaternions**: Normalized (magnitude = 1.0)
 
@@ -112,65 +112,61 @@ Your callback function receives pose data as a Python dictionary with the follow
 
 ## Using Pose Data in Your Application
 
-### Basic Example
+### Basic Example (Delta Poses for Robot Control)
 
 ```python
-from televoodoo.ble import start_peripheral
+from televoodoo import start_televoodoo, PoseProvider, load_config
 
-def handle_pose(pose_data):
+config = load_config()
+pose_provider = PoseProvider(config)
+
+def handle_pose(evt):
     """Process incoming pose data"""
-    
-    # Check if this is a new movement start (origin reset)
-    if pose_data.get('movement_start', False):
-        print("🎯 New movement started — origin reset")
-    
-    # Extract position
-    x = pose_data['x']
-    y = pose_data['y']
-    z = pose_data['z']
-    
-    # Extract rotation (use quaternion for accuracy)
-    qx = pose_data['qx']
-    qy = pose_data['qy']
-    qz = pose_data['qz']
-    qw = pose_data['qw']
-    
-    # Use the pose data
-    print(f"📍 Position: ({x:.3f}, {y:.3f}, {z:.3f}) m")
-    print(f"🔄 Quaternion: ({qx:.3f}, {qy:.3f}, {qz:.3f}, {qw:.3f})")
-
-start_peripheral(callback=handle_pose)
-```
-
-### Using the Pose Class
-
-Televoodoo Python provides a `Pose` class for convenient pose manipulation:
-
-```python
-from televoodoo.pose import Pose
-from televoodoo.ble import start_peripheral
-
-def handle_pose(pose_data):
-    # Create a Pose object
-    pose = Pose.from_dict(pose_data)
-    
-    # Check tracking status
-    if not pose.is_active:
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
         return
     
-    # Access position as numpy array
-    position = pose.position  # [x, y, z]
+    # Check if this is a new movement start (origin reset)
+    if delta['movement_start']:
+        print("🎯 New movement started — origin reset")
+    
+    # Extract position delta
+    dx, dy, dz = delta['dx'], delta['dy'], delta['dz']
+    
+    # Extract rotation delta (as rotation vector, radians)
+    rx, ry, rz = delta['rx'], delta['ry'], delta['rz']
+    
+    print(f"📍 Position delta: ({dx:.3f}, {dy:.3f}, {dz:.3f}) m")
+    print(f"🔄 Rotation delta: ({rx:.3f}, {ry:.3f}, {rz:.3f}) rad")
+
+start_televoodoo(callback=handle_pose)
+```
+
+### Using Absolute Poses
+
+For applications like digital twins where you need absolute position:
+
+```python
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+config = load_config()
+pose_provider = PoseProvider(config)
+
+def handle_pose(evt):
+    pose = pose_provider.get_absolute(evt)
+    if pose is None:
+        return
+    
+    # Access position (transformed per config)
+    x, y, z = pose['x'], pose['y'], pose['z']
     
     # Access quaternion
-    quaternion = pose.quaternion  # [qx, qy, qz, qw]
+    qx, qy, qz, qw = pose['qx'], pose['qy'], pose['qz'], pose['qw']
     
-    # Get transformation matrix
-    transform_matrix = pose.to_matrix()  # 4x4 homogeneous transform
-    
-    print(f"Position: {position}")
-    print(f"Distance from origin: {pose.distance_from_origin():.3f} m")
+    print(f"Position: ({x:.3f}, {y:.3f}, {z:.3f})")
+    print(f"Quaternion: ({qx:.3f}, {qy:.3f}, {qz:.3f}, {qw:.3f})")
 
-start_peripheral(callback=handle_pose)
+start_televoodoo(callback=handle_pose)
 ```
 
 ### Coordinate Transforms
@@ -209,37 +205,36 @@ def on_teleop_event(evt):
 
 ```python
 import time
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+config = load_config()
+pose_provider = PoseProvider(config)
 
 class PoseProcessor:
     def __init__(self, min_interval=0.033):  # Max 30 Hz processing
         self.last_process_time = 0
         self.min_interval = min_interval
     
-    def handle_pose(self, pose_data):
+    def handle_pose(self, evt):
         current_time = time.time()
         
         # Throttle processing if needed
         if current_time - self.last_process_time < self.min_interval:
             return
         
+        delta = pose_provider.get_delta(evt)
+        if delta is None:
+            return
+        
         self.last_process_time = current_time
-        
-        # Check for new movement start
-        if pose_data.get('movement_start'):
-            self.reset_origin(pose_data)
-        
-        self.process_pose(pose_data)
+        self.process_pose(delta)
     
-    def reset_origin(self, pose_data):
-        # Reset delta origin
-        pass
-    
-    def process_pose(self, pose_data):
+    def process_pose(self, delta):
         # Your application logic here
-        pass
+        print(f"Delta: ({delta['dx']:.3f}, {delta['dy']:.3f}, {delta['dz']:.3f})")
 
 processor = PoseProcessor()
-start_peripheral(callback=processor.handle_pose)
+start_televoodoo(callback=processor.handle_pose)
 ```
 
 ## Validation and Error Handling
@@ -277,7 +272,7 @@ def handle_pose(pose_data):
 
 ## Working with Recorded Data
 
-See the `examples/pose_recording/` example for how to:
+See the `examples/record_poses/` example for how to:
 - Record pose streams to disk
 - Replay recorded sessions
 - Analyze pose data offline
@@ -292,9 +287,10 @@ Use the **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer
 ## See Also
 
 - **BLE_PERIPHERAL_API.md**: Details on the BLE service and characteristics
-- **examples/pose_logger**: Simple example of logging pose data
-- **examples/pose_recording**: Record and replay pose streams
-- **examples/pose_frequency**: Analyze pose data update rates
+- **examples/print_poses**: Print absolute poses
+- **examples/print_delta_poses**: Print pose deltas for robot teleoperation
+- **examples/record_poses**: Record poses to JSON file
+- **examples/measure_frequency**: Measure pose input frequency
 
 ## Support
 

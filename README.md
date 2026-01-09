@@ -6,7 +6,7 @@
 
 ### The Televoodoo Ecosystem
 
-- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Create BLE peripherals for the Televoodoo App to connect to, with pose handling, coordinate transforms, and more
+- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Create BLE services for the Televoodoo App to connect to, with pose handling, coordinate transforms, and more
 - **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via BLE
 - **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
@@ -46,16 +46,38 @@ pip install -e .
 
 ### 2. Run
 
-```python
-from televoodoo.ble import start_peripheral
+**With CLI**
 
-def my_pose_handler(pose_data):
-    if pose_data.get('movement_start'):
+```bash
+# Start with random credentials (QR code will be displayed)
+televoodoo
+
+# Start with static credentials
+televoodoo --name myrobot --code ABC123
+```
+
+**Or as Python App**
+
+```python
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+# Load config (optional - uses defaults if None)
+config = load_config()
+pose_provider = PoseProvider(config)
+
+def my_pose_handler(evt):
+    # For robot teleoperation, use get_delta():
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
+        return  # Not a pose event or no origin set yet
+    
+    if delta['movement_start']:
         print("New movement started — origin reset")
-    print(f"Position: ({pose_data['x']:.3f}, {pose_data['y']:.3f}, {pose_data['z']:.3f})")
+    print(f"Position delta: ({delta['dx']:.3f}, {delta['dy']:.3f}, {delta['dz']:.3f})")
+    print(f"Rotation delta (rad): ({delta['rx']:.3f}, {delta['ry']:.3f}, {delta['rz']:.3f})")
     # Control your robot, 3D object, etc.
 
-start_peripheral(callback=my_pose_handler)
+start_televoodoo(callback=my_pose_handler)
 ```
 
 ### 3. Connect with Televoodoo app (iOS, Android)
@@ -67,7 +89,7 @@ start_peripheral(callback=my_pose_handler)
 
 
 
-## How It Works
+## Physical Setup
 
 ### Coordinate System Setup
 
@@ -75,11 +97,89 @@ start_peripheral(callback=my_pose_handler)
 2. **Attach it** to your setup (e.g., somewhere statically linked to world/robot base) — this defines your reference frame
 3. **Configure the transform** between marker and your world/robot frame with a config file. e.g. using [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)
 
-> **For robot control**: Absolute position doesn't matter — only the **axis orientation** (rot_x, rot_y, rot_z) of the reference frame relative to the robot's base is crucial to ensure phone movements correctly map to robot movements.
+> 💡 **Tip for robot teleoperation:** The position offset between marker and robot base doesn't matter — only the **axis orientation** of the reference frame relative to the robot base is crucial for correct motion mapping.
 
-### Pose Data Format
+## Examples
 
-Your callback receives a dictionary with:
+Complete examples can be found in `examples/`:
+
+| Example | Description |
+|---------|-------------|
+| `print_delta_poses/` | Print pose deltas — ideal for robot teleoperation |
+| `print_poses/` | Print absolute poses |
+| `poll_poses/` | Poll latest pose at a fixed rate |
+| `measure_frequency/` | Measure pose input frequency |
+| `record_poses/` | Record poses to a JSON file |
+
+
+
+## Usage
+
+
+
+
+### Option A: Using Delta Poses
+
+> ✅ **Recommended for Robot Teleoperation!** Deltas always start at 0 when tracking begins. Pause tracking, reposition yourself, then resume — no jumps in robot motion.
+
+
+Use `PoseProvider.get_delta()` to get transformed deltas directly from events:
+
+```python
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+# Load config (optional - uses defaults if None)
+config = load_config("my_robot_config.json")
+pose_provider = PoseProvider(config)
+
+def my_handler(evt):
+    # Get delta directly from event
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
+        return  # Not a pose event or no origin set yet
+    
+    # Access delta data for robot control
+    print(f"Position delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
+    print(f"Rotation delta (rad): rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
+    print(f"Rotation delta (quaternion): ({delta['dqx']:.3f}, {delta['dqy']:.3f}, {delta['dqz']:.3f}, {delta['dqw']:.3f})")
+    
+    # Send delta to robot
+    # robot.move_relative(delta['dx'], delta['dy'], delta['dz'])
+
+start_televoodoo(callback=my_handler)
+```
+
+The delta is calculated relative to the pose where `movement_start=True`, making it perfect for robot teleoperation where you want relative movements.
+
+### Option B: Using Absolute Poses
+
+> ⚠️ **Not recommended for robot teleoperation.** Absolute poses are non-zero from the start and will jump when tracking is paused and resumed.
+
+Use `PoseProvider.get_absolute()` to get transformed absolute poses:
+
+```python
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+# Load config (optional - uses defaults if None)
+config = load_config("my_robot_config.json")
+pose_provider = PoseProvider(config)
+
+def my_handler(evt):
+    # Get absolute pose from event
+    pose = pose_provider.get_absolute(evt)
+    if pose is None:
+        return  # Not a pose event
+    
+    # Access pose data
+    print(f"Position: x={pose['x']:.3f} y={pose['y']:.3f} z={pose['z']:.3f}")
+    print(f"Quaternion: ({pose['qx']:.3f}, {pose['qy']:.3f}, {pose['qz']:.3f}, {pose['qw']:.3f})")
+
+start_televoodoo(callback=my_handler)
+```
+
+### Pose Format
+
+The `Pose` object contains:
 
 ```python
 {
@@ -106,101 +206,22 @@ Your callback receives a dictionary with:
 
 > **Understanding `movement_start`**: When `true`, this pose becomes the new origin for calculating deltas. This allows you to reposition the phone/controller while not actively controlling, then start a new movement from a different physical position — the robot end effector stays in place and only applies relative deltas from the new origin.
 
+### Authentication Credentials
 
-## Usage Examples
-
-Complete examples are in `examples/`:
-
-| Example | Description |
-|---------|-------------|
-| `pose_logger/` | Simple pose logging to console |
-| `pose_recording/` | Record and replay pose streams |
-| `pose_frequency/` | Analyze pose update rates |
-| `output_poller/` | Poll output from config file |
-
-### Basic Pose Logging
-
-```python
-from televoodoo.ble import start_peripheral
-
-def handle_pose(pose_data):
-    if pose_data.get('movement_start'):
-        print("🎯 New movement origin set")
-    print(f"📍 x={pose_data['x']:.3f} y={pose_data['y']:.3f} z={pose_data['z']:.3f}")
-
-start_peripheral(callback=handle_pose)
-```
-
-Static credentials let you reconnect without re-scanning the QR code.
-
-### Robot Control Example
-
-```python
-from televoodoo.ble import start_peripheral
-
-class RobotController:
-    def __init__(self):
-        self.origin = None
-    
-    def handle_pose(self, pose_data):
-        # movement_start=True: user started a new movement, reset origin
-        if pose_data.get('movement_start'):
-            self.origin = pose_data
-            print("🎯 New movement origin — robot stays in place")
-            return
-        
-        if self.origin is None:
-            return  # Wait for first movement_start
-        
-        # Calculate delta from origin (robot only moves by relative amount)
-        dx = pose_data['x'] - self.origin['x']
-        dy = pose_data['y'] - self.origin['y']
-        dz = pose_data['z'] - self.origin['z']
-        
-        # Send delta to robot
-        self.move_robot_relative(dx, dy, dz)
-
-controller = RobotController()
-start_peripheral(callback=controller.handle_pose)
-```
-
-### Using the Pose Class
-
-```python
-from televoodoo.pose import Pose
-from televoodoo.ble import start_peripheral
-
-def handle_pose(pose_data):
-    pose = Pose.from_dict(pose_data)
-    
-    if not pose.is_active:
-        return
-    
-    position = pose.position          # numpy array [x, y, z]
-    quaternion = pose.quaternion      # [qx, qy, qz, qw]
-    matrix = pose.to_matrix()         # 4x4 homogeneous transform
-
-start_peripheral(callback=handle_pose)
-```
+Televoodoo provides 2 options for connection credentials:
+- **Random** (default): New credentials each launch — good for quick testing  
+- **Static**: Same credentials every time — good for ongoing projects, development, RL demonstration
 
 
-## Authentication Credentials
-
-The BLE peripheral provides 2 options for the BLE Authentication credentials:
-
-**Random** (default): New credentials each launch — good for quick testing  
-**Static**: Same credentials every time — good for ongoing projects, development, RL demonstration
-
-
-### Random Credentials
+**Random Credentials**
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--name` | BLE peripheral name | Random `voodooXX` |
+| `--name` | Peripheral/server name | Random `voodooXX` |
 | `--code` | 6-character auth code | Random alphanumeric |
 
 
-### Static Credentials
+**Static Credentials**
 
 Option 1: Set via CLI flag
 ```bash
@@ -209,22 +230,26 @@ televoodoo --name myrobot --code ABC123
 
 Option 2: Set in code
 ```python
-start_peripheral(callback=handle_pose, name="myrobot", code="ABC123")
+from televoodoo import start_televoodoo
+
+start_televoodoo(callback=handle_pose, name="myrobot", code="ABC123")
 ```
 
 Option 3: Set within [config file](#config-files)
 
-## Troubleshooting
+### Connection Types
 
-| Problem | Solution |
-|---------|----------|
-| **QR code not scanning** | Increase terminal font size, ensure good lighting |
-| **Device not found** | Check Bluetooth is on, devices within ~10m range |
-| **Connection drops** | Reduce distance, check for BLE interference |
-| **No pose data** | Ensure phone scanned ArUco marker at least once and you started tracking in the phone app (keep finger pressed down), check BLE connection |
-| **Linux: Bluetooth issues** | Run `sudo systemctl status bluetooth`, check BlueZ logs |
+You can specify the connection backend:
 
+```python
+start_televoodoo(
+    callback=handle_pose,
+    connection="auto"  # Options: "auto" (default), "ble"
+)
+```
 
+- **`"auto"`** (default): Automatically detects the best available connection type (currently defaults to BLE)
+- **`"ble"`**: Force Bluetooth Low Energy connection
 
 ## Config Files
 
@@ -291,26 +316,28 @@ Config files define how poses are transformed from the ArUco marker frame to you
 
 **Option 2: Create manually**
 - Copy the template above and adjust values
-- See example configs in `examples/output_poller/`
 
 ### Loading Config Files
 
 ```python
-from televoodoo import load_config, PoseProvider, start_televoodoo
+from televoodoo import load_config, PoseProvider, Pose, start_televoodoo
 
 # Load config from file
 config = load_config("my_robot_config.json")
 pose_provider = PoseProvider(config)
 
 def on_teleop_event(evt):
-    # Get pose delta directly from event
+    # For robot teleoperation: use get_delta()
     delta = pose_provider.get_delta(evt)
-    if delta is None:
+    if delta is not None:
+        print(f"Delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
+        print(f"Rotation: rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
         return
     
-    # Access delta data for robot control
-    print(f"Delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
-    print(f"Rotation: rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
+    # For absolute poses: use get_absolute()
+    pose = pose_provider.get_absolute(evt)
+    if pose is not None:
+        print(f"Position: x={pose['x']:.3f} y={pose['y']:.3f} z={pose['z']:.3f}")
 
 # Use credentials from config (if specified), or fall back to random
 start_televoodoo(
@@ -320,16 +347,8 @@ start_televoodoo(
 )
 ```
 
-### Command Line Usage
 
-```bash
-# With config file
-python examples/pose_logger/pose_logger.py --config my_config.json
-
-python examples/output_poller/output_poller.py --config voodoo_settings.json --hz 10
-```
-
-### Output Formats Explained
+## Output Formats Explained
 
 | Format | Description |
 |--------|-------------|
@@ -341,24 +360,12 @@ python examples/output_poller/output_poller.py --config voodoo_settings.json --h
 
 ## Advanced Topics
 
-### Rate Limiting
+### Quiet Mode
 
-The Televoodoo App streams poses (~60 Hz limited by iOS ARKit). Throttle if needed:
+Suppress high-frequency logging (pose events, heartbeat) while still receiving callbacks:
 
 ```python
-import time
-
-class ThrottledHandler:
-    def __init__(self, max_hz=30):
-        self.min_interval = 1.0 / max_hz
-        self.last_time = 0
-    
-    def handle_pose(self, pose_data):
-        now = time.time()
-        if now - self.last_time < self.min_interval:
-            return
-        self.last_time = now
-        # Process pose...
+start_televoodoo(callback=handle_pose, quiet=True)
 ```
 
 

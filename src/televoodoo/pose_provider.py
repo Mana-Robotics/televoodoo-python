@@ -23,7 +23,12 @@ class PoseProvider:
 
     Primary usage:
         provider = PoseProvider(config)
-        delta = provider.get_delta(event)  # Get pose delta for robot control
+        
+        # For robot teleoperation (recommended):
+        delta = provider.get_delta(event)
+        
+        # For absolute poses (e.g., digital twin):
+        pose = provider.get_absolute(event)
     """
 
     def __init__(self, config: OutputConfig) -> None:
@@ -33,6 +38,74 @@ class PoseProvider:
     def reset_origin(self) -> None:
         """Clear the stored origin pose."""
         self._origin = None
+
+    def get_absolute(self, evt: Dict[str, Any]) -> Dict[str, Any] | None:
+        """Get transformed absolute pose from a teleoperation event.
+
+        Returns the pose transformed to the target frame with scaling and
+        axis adjustments applied.
+
+        The returned pose contains:
+        - movement_start: True if this is a new movement origin
+        - x, y, z: Absolute position (scaled per config)
+        - qx, qy, qz, qw: Orientation as quaternion
+        - rx, ry, rz: Orientation as rotation vector (radians)
+
+        Args:
+            evt: Event dictionary from Televoodoo callback.
+
+        Returns:
+            Pose dictionary with transformed absolute values, or None if
+            the event is not a pose event.
+        """
+        pose = Pose.from_teleop_event(evt)
+        if pose is None:
+            return None
+
+        # Reset origin on movement_start (for delta tracking consistency)
+        if pose.movement_start:
+            self._origin = pose
+
+        # Build target frame transform
+        (tx, ty, tz), target_q = self._build_target_frame_quat()
+        invT = (-target_q[0], -target_q[1], -target_q[2], target_q[3])
+
+        # Position in target: R_T^T * (p_ref - t)
+        px, py, pz = pose.x - tx, pose.y - ty, pose.z - tz
+        tposx, tposy, tposz = self._rotate_vector_by_quat((px, py, pz), invT)
+
+        # Orientation in target: qT^{-1} * q_ref
+        qrel = self._quat_multiply(invT, (pose.qx, pose.qy, pose.qz, pose.qw))
+
+        # Apply output axes and scale
+        result: Dict[str, Any] = {
+            "movement_start": pose.movement_start,
+            "x": self._apply_scale(tposx * self.config.outputAxes.get("x", 1)),
+            "y": self._apply_scale(tposy * self.config.outputAxes.get("y", 1)),
+            "z": self._apply_scale(tposz * self.config.outputAxes.get("z", 1)),
+            "qx": qrel[0],
+            "qy": qrel[1],
+            "qz": qrel[2],
+            "qw": qrel[3],
+        }
+
+        # Add rotation vector (axis-angle) representation
+        rx, ry, rz = tvm.quat_to_rotvec(qrel)
+        result.update({"rx": rx, "ry": ry, "rz": rz})
+
+        # Add Euler angles if configured
+        if self.config.includeOrientation.get("euler_radian"):
+            xr, yr, zr = self._quat_to_euler_xyz(qrel)
+            result.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+        if self.config.includeOrientation.get("euler_degree"):
+            xr, yr, zr = self._quat_to_euler_xyz(qrel)
+            result.update({
+                "x_rot_deg": (xr * 180.0 / math.pi),
+                "y_rot_deg": (yr * 180.0 / math.pi),
+                "z_rot_deg": (zr * 180.0 / math.pi),
+            })
+
+        return result
 
     def get_delta(self, evt: Dict[str, Any]) -> Dict[str, Any] | None:
         """Get transformed delta directly from a teleoperation event.
