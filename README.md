@@ -118,7 +118,7 @@ Complete examples can be found in `examples/`:
 
 
 
-### Option A: Using Delta Poses
+### Option A: Using Pose Detltas
 
 > ✅ **Recommended for Robot Teleoperation!** Deltas always start at 0 when tracking begins. Pause tracking, reposition yourself, then resume — no jumps in robot motion.
 
