@@ -60,12 +60,12 @@ python examples/pose_logger/pose_logger.py --sim
 
 - `Pose` (dataclass): input pose sample fields, matching the app spec (`SPECS/INPUT_POSE_DATA_FORMAT.md`).
 - `OutputConfig`: configuration for which data to include and how to transform axes/scale.
-- `PoseTransformer`: transforms each `Pose` into an output JSON object based on `OutputConfig`.
+- `PoseProvider`: provides transformed pose data from teleoperation events.
 
 Minimal use in code:
 
 ```python
-from televoodoo import Pose, OutputConfig, PoseTransformer
+from televoodoo import Pose, OutputConfig, PoseProvider
 
 config = OutputConfig(
     includeFormats={
@@ -83,10 +83,10 @@ config = OutputConfig(
     outputAxes={"x": 1.0, "y": 1.0, "z": 1.0},
 )
 
-transformer = PoseTransformer(config)
+pose_provider = PoseProvider(config)
 
 def on_pose(pose: Pose) -> None:
-    print(transformer.transform(pose))
+    print(pose_provider.transform(pose))
 ```
 
 #### OutputConfig fields

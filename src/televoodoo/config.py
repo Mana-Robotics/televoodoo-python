@@ -18,8 +18,8 @@ class OutputConfig:
         scale: Scale factor applied to position values
         outputAxes: Axis multipliers for output (can flip axes with -1)
         targetFrame: Pose of target coordinate system relative to reference/world (Euler radians)
-        ble_name: Optional static BLE peripheral name (overrides random generation)
-        ble_code: Optional static authentication code (overrides random generation)
+        auth_name: Optional static peripheral name (overrides random generation)
+        auth_code: Optional static authentication code (overrides random generation)
     """
     includeFormats: Dict[str, bool]
     includeOrientation: Dict[str, bool]
@@ -27,9 +27,9 @@ class OutputConfig:
     outputAxes: Dict[str, float]
     # Pose of Target Coordinate System relative to reference/world (Euler radians)
     targetFrame: Optional[Dict[str, float]] = None
-    # BLE credentials (optional, can be set in config file)
-    ble_name: Optional[str] = None
-    ble_code: Optional[str] = None
+    # Authentication credentials (optional, can be set in config file)
+    auth_name: Optional[str] = None
+    auth_code: Optional[str] = None
 
 
 def load_config(path: Optional[str] = None) -> OutputConfig:
@@ -101,10 +101,10 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
         if tf:
             targetFrame = tf
 
-    # Parse BLE credentials if present
-    ble = data.get("ble", {})
-    ble_name = ble.get("name") if isinstance(ble, dict) else None
-    ble_code = ble.get("code") if isinstance(ble, dict) else None
+    # Parse authentication credentials
+    auth = data.get("authCredentials")
+    auth_name = auth.get("name") if isinstance(auth, dict) else None
+    auth_code = auth.get("code") if isinstance(auth, dict) else None
 
     return OutputConfig(
         includeFormats=data.get(
@@ -123,7 +123,7 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
         scale=float(data.get("scale", 1.0)),
         outputAxes=data.get("outputAxes", {"x": 1.0, "y": 1.0, "z": 1.0}),
         targetFrame=targetFrame,
-        ble_name=ble_name,
-        ble_code=ble_code,
+        auth_name=auth_name,
+        auth_code=auth_code,
     )
 

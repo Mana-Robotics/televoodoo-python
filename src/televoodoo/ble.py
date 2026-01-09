@@ -1,25 +1,96 @@
+"""BLE (Bluetooth Low Energy) connection backend for Televoodoo.
+
+This module provides the BLE peripheral that the phone app connects to.
+"""
+
+from __future__ import annotations
+
 import json
 import platform
-from typing import Callable, Dict, Any, Optional
-import qrcode
 import random
-import string
 import time
-from typing import Callable, Iterator
+from typing import Any, Callable, Dict, Iterator, Optional
+
 from .pose import Pose
 
+# Suppress high-frequency event logging when True
+QUIET_HIGH_FREQUENCY = False
 
-def generate_session() -> tuple[str, str]:
-    suffix = ''.join(random.choices(string.ascii_uppercase + string.digits, k=2))
-    name = f"voodoo{suffix}"
-    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return name, code
+
+def run_peripheral(
+    name: str,
+    code: str,
+    callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    quiet: bool = False,
+) -> None:
+    """Run the BLE peripheral for phone app connection.
+
+    This starts the platform-specific BLE peripheral that advertises
+    the Televoodoo service and handles pose data from the phone.
+
+    Args:
+        name: Peripheral name (advertised to phone)
+        code: Authentication code (phone must provide this to connect)
+        callback: Function called for each event (pose, connection status, etc.)
+        quiet: Suppress high-frequency logging
+
+    Raises:
+        RuntimeError: If BLE is not supported on this platform.
+    """
+    global QUIET_HIGH_FREQUENCY
+    QUIET_HIGH_FREQUENCY = quiet
+
+    system = platform.system().lower()
+    distro = ""
+
+    if system == "linux":
+        try:
+            with open("/etc/os-release", "r", encoding="utf-8") as f:
+                content = f.read().lower()
+                if "ubuntu" in content:
+                    distro = "ubuntu"
+        except Exception:
+            pass
+
+    if system == "darwin":
+        import televoodoo.ble_peripheral_macos as _mac  # type: ignore
+
+        try:
+            _mac.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        _mac.run_macos_peripheral(name, code, callback)
+
+    elif system == "linux" and distro == "ubuntu":
+        import televoodoo.ble_peripheral_ubuntu as _ubu  # type: ignore
+
+        try:
+            _ubu.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+        _ubu.run_ubuntu_peripheral(name, code, callback)
+
+    else:
+        raise RuntimeError(
+            f"BLE peripheral not supported on this platform: {platform.platform()}. "
+            "Supported: macOS, Ubuntu Linux."
+        )
+
+
+# =============================================================================
+# Simulation utilities (for testing without phone)
+# =============================================================================
 
 
 def simulate_pose_stream() -> Iterator[Pose]:
-    t = 0.0
+    """Generate a stream of simulated pose data.
+
+    Yields random poses at ~30 Hz for testing purposes.
+
+    Yields:
+        Pose objects with random position values.
+    """
     while True:
-        t += 0.05
         yield Pose(
             movement_start=True,
             x=0.1 * random.uniform(-1, 1),
@@ -37,74 +108,13 @@ def simulate_pose_stream() -> Iterator[Pose]:
 
 
 def run_simulation(on_pose: Callable[[Pose], None]) -> None:
+    """Run pose simulation for testing.
+
+    Continuously generates random poses and calls the callback.
+    This is useful for testing without a phone connection.
+
+    Args:
+        on_pose: Callback function receiving Pose objects.
+    """
     for p in simulate_pose_stream():
         on_pose(p)
-
-
-def _print_session_and_qr(name: str, code: str) -> None:
-    print(json.dumps({"type": "session", "name": name, "code": code}), flush=True)
-    try:
-        payload = json.dumps({"name": name, "code": code})
-        qr = qrcode.QRCode(border=1)
-        qr.add_data(payload)
-        qr.make()
-        qr.print_ascii(invert=True)
-    except Exception:
-        # QR printing is best-effort; session JSON is already printed
-        pass
-
-
-def start_peripheral(
-    callback: Optional[Callable[[Dict[str, Any]], None]] = None,
-    quiet: bool = False,
-    name: Optional[str] = None,
-    code: Optional[str] = None,
-) -> None:
-    """Generate a session and start the platform BLE peripheral.
-
-    When quiet=True, suppress only high-frequency event prints (pose, heartbeat),
-    but still print the session/QR and connection status messages needed by the app.
-
-    If name and/or code are provided, they will be used instead of randomly generated values.
-    This is useful for testing or when you want consistent connection parameters.
-    """
-    # Use provided credentials or generate random ones
-    if name is None or code is None:
-        gen_name, gen_code = generate_session()
-        name = name or gen_name
-        code = code or gen_code
-    # Always print session/QR so clients can connect
-    _print_session_and_qr(name, code)
-
-    system = platform.system().lower()
-    distro = ""
-    if system == "linux":
-        try:
-            with open("/etc/os-release", "r", encoding="utf-8") as f:
-                content = f.read().lower()
-                if "ubuntu" in content:
-                    distro = "ubuntu"
-        except Exception:
-            pass
-
-    try:
-        if system == "darwin":
-            import televoodoo.ble_peripheral_macos as _mac  # type: ignore
-            try:
-                _mac.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            _mac.run_macos_peripheral(name, code, callback)
-        elif system == "linux" and distro == "ubuntu":
-            import televoodoo.ble_peripheral_ubuntu as _ubu  # type: ignore
-            try:
-                _ubu.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-            _ubu.run_ubuntu_peripheral(name, code, callback)
-        else:
-            raise RuntimeError(f"Unsupported platform for BLE peripheral: {platform.platform()}")
-    except Exception as e:
-        print(json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}), flush=True)
-
-

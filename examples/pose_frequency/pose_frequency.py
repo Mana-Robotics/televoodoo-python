@@ -7,8 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 
-from televoodoo import Pose
-from televoodoo.ble import run_simulation, start_peripheral
+from televoodoo import Pose, start_televoodoo
+from televoodoo.ble import run_simulation
 
 # Directory where this script lives (for default output path)
 SCRIPT_DIR = Path(__file__).parent
@@ -67,7 +67,7 @@ def main() -> int:
             signal.signal(signal.SIGINT, lambda *_: stop_run_loop())
             signal.signal(signal.SIGTERM, lambda *_: stop_run_loop())
 
-        def on_ble_event(evt: Dict[str, Any]) -> None:
+        def on_teleop_event(evt: Dict[str, Any]) -> None:
             # mirror incoming events for context (optional)
             print(json.dumps(evt), flush=True)
             if evt.get("type") == "pose":
@@ -81,9 +81,9 @@ def main() -> int:
             threading.Thread(target=timer_stop, daemon=True).start()
 
         try:
-            start_peripheral(on_ble_event, quiet=True)
+            start_televoodoo(on_teleop_event, quiet=True)
         except Exception as e:
-            print(json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}), flush=True)
+            print(json.dumps({"type": "error", "message": f"Televoodoo failed: {e}"}), flush=True)
     else:
         def on_pose(_pose: Pose) -> None:
             observe_tick()
@@ -128,5 +128,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

@@ -175,30 +175,27 @@ start_peripheral(callback=handle_pose)
 
 ### Coordinate Transforms
 
-Transform poses from the reference frame to your application's coordinate system:
+Transform poses from the reference frame to your application's coordinate system using a config file:
 
 ```python
-from televoodoo.transform import Transform
-from televoodoo.pose import Pose
+from televoodoo import PoseProvider, load_config
 
-# Define a transform (e.g., from marker frame to robot base frame)
-marker_to_robot = Transform(
-    translation=[0.5, 0.0, 0.2],  # Marker is offset from robot base
-    rotation=[0.0, 0.0, 90.0]      # Marker is rotated 90° around Z
-)
+# Load config with targetFrame to define marker → robot transform
+config = load_config("robot_config.json")
+pose_provider = PoseProvider(config)
 
-def handle_pose(pose_data):
-    # Pose in marker frame (from phone)
-    pose_marker = Pose.from_dict(pose_data)
-    
-    if not pose_marker.is_active:
+def on_teleop_event(evt):
+    # Get transformed delta directly
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
         return
     
-    # Transform to robot frame
-    pose_robot = marker_to_robot.apply(pose_marker)
-    
+    # Delta is already in robot frame (per targetFrame config)
     # Send to robot controller
-    control_robot(pose_robot.position, pose_robot.quaternion)
+    control_robot(
+        position_delta=(delta["dx"], delta["dy"], delta["dz"]),
+        rotation_delta=(delta["rx"], delta["ry"], delta["rz"])
+    )
 ```
 
 ## Data Rate and Timing

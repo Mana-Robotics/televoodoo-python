@@ -1,0 +1,315 @@
+"""Pose provider for Televoodoo.
+
+Provides transformed pose data from teleoperation events.
+"""
+
+from __future__ import annotations
+from typing import Dict, Any, Tuple
+import math
+
+from .pose import Pose
+from .config import OutputConfig
+from . import math as tvm
+
+
+class PoseProvider:
+    """Provides transformed pose data from teleoperation events.
+
+    Handles internally:
+    - Coordinate frame transformations (via targetFrame config)
+    - Axis flipping and scaling
+    - Position and rotation delta calculations from movement origin
+    - Output format selection
+
+    Primary usage:
+        provider = PoseProvider(config)
+        delta = provider.get_delta(event)  # Get pose delta for robot control
+    """
+
+    def __init__(self, config: OutputConfig) -> None:
+        self.config = config
+        self._origin: Pose | None = None
+
+    def reset_origin(self) -> None:
+        """Clear the stored origin pose."""
+        self._origin = None
+
+    def get_delta(self, evt: Dict[str, Any]) -> Dict[str, Any] | None:
+        """Get transformed delta directly from a teleoperation event.
+
+        This is a convenience method for robot control that always computes
+        and returns the delta, regardless of the config's includeFormats setting.
+
+        The returned delta contains:
+        - dx, dy, dz: Position delta (scaled per config)
+        - dqx, dqy, dqz, dqw: Rotation delta as quaternion
+        - rx, ry, rz: Rotation delta as rotation vector (radians)
+        - movement_start: True if this is a new movement origin
+
+        Args:
+            evt: Event dictionary from Televoodoo callback.
+
+        Returns:
+            Delta dictionary with position/rotation deltas, or None if:
+            - Event is not a pose event
+            - No origin has been set yet (waiting for first movement_start)
+        """
+        pose = Pose.from_teleop_event(evt)
+        if pose is None:
+            return None
+
+        # Reset origin on movement_start
+        if pose.movement_start:
+            self._origin = pose
+
+        # No origin yet - can't compute delta
+        if self._origin is None:
+            return None
+
+        # Build target frame transform
+        (tx, ty, tz), target_q = self._build_target_frame_quat()
+        invT = (-target_q[0], -target_q[1], -target_q[2], target_q[3])
+
+        # Position delta in target frame
+        dx = pose.x - self._origin.x
+        dy = pose.y - self._origin.y
+        dz = pose.z - self._origin.z
+        ddx, ddy, ddz = self._rotate_vector_by_quat((dx, dy, dz), invT)
+
+        delta: Dict[str, Any] = {
+            "movement_start": pose.movement_start,
+            "dx": self._apply_scale(ddx * self.config.outputAxes.get("x", 1)),
+            "dy": self._apply_scale(ddy * self.config.outputAxes.get("y", 1)),
+            "dz": self._apply_scale(ddz * self.config.outputAxes.get("z", 1)),
+        }
+
+        # Rotation delta in target frame
+        origin_q = (self._origin.qx, self._origin.qy, self._origin.qz, self._origin.qw)
+        current_q = (pose.qx, pose.qy, pose.qz, pose.qw)
+        origin_q_target = self._quat_multiply(invT, origin_q)
+        current_q_target = self._quat_multiply(invT, current_q)
+
+        # Compute delta quaternion (base frame: q_delta = q_current * inv(q_origin))
+        q_delta = tvm.quat_delta(origin_q_target, current_q_target, frame="base")
+        delta.update({
+            "dqx": q_delta[0],
+            "dqy": q_delta[1],
+            "dqz": q_delta[2],
+            "dqw": q_delta[3],
+        })
+
+        # Rotation delta as rotation vector (axis-angle, radians)
+        drx, dry, drz = tvm.quat_to_rotvec(q_delta)
+        delta.update({"rx": drx, "ry": dry, "rz": drz})
+
+        # Include current absolute orientation for convenience
+        delta.update({
+            "qx": current_q_target[0],
+            "qy": current_q_target[1],
+            "qz": current_q_target[2],
+            "qw": current_q_target[3],
+        })
+
+        return delta
+
+    @staticmethod
+    def _quat_multiply(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        return tvm.quat_multiply(a, b)
+
+    @staticmethod
+    def _quat_conjugate(q: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        return tvm.quat_conjugate(q)
+
+    @staticmethod
+    def _rotate_vector_by_quat(v: Tuple[float, float, float], q: Tuple[float, float, float, float]) -> Tuple[float, float, float]:
+        return tvm.rotate_vector(v, q)
+
+    @staticmethod
+    def _quat_to_euler_xyz(q: Tuple[float, float, float, float]) -> Tuple[float, float, float]:
+        # Convert quaternion to Euler angles (XYZ, radians)
+        x, y, z, w = q
+        # roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+        # pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if abs(sinp) >= 1:
+            pitch = math.copysign(math.pi / 2, sinp)
+        else:
+            pitch = math.asin(sinp)
+        # yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+        return (roll, pitch, yaw)
+
+    def _apply_scale(self, value: float) -> float:
+        return value * float(self.config.scale)
+
+    def _build_target_frame_quat(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
+        """Build target frame translation and quaternion from config."""
+        tx, ty, tz = 0.0, 0.0, 0.0
+        txr, tyr, tzr = 0.0, 0.0, 0.0
+
+        if self.config.targetFrame:
+            tx = float(self.config.targetFrame.get("x", 0.0))
+            ty = float(self.config.targetFrame.get("y", 0.0))
+            tz = float(self.config.targetFrame.get("z", 0.0))
+            txr = float(self.config.targetFrame.get("x_rot", 0.0))
+            tyr = float(self.config.targetFrame.get("y_rot", 0.0))
+            tzr = float(self.config.targetFrame.get("z_rot", 0.0))
+
+        # Build quaternion from Euler XYZ radians
+        cx, sx = math.cos(txr / 2.0), math.sin(txr / 2.0)
+        cy, sy = math.cos(tyr / 2.0), math.sin(tyr / 2.0)
+        cz, sz = math.cos(tzr / 2.0), math.sin(tzr / 2.0)
+        # XYZ intrinsic
+        tqw = cx * cy * cz - sx * sy * sz
+        tqx = sx * cy * cz + cx * sy * sz
+        tqy = cx * sy * cz - sx * cy * sz
+        tqz = cx * cy * sz + sx * sy * cz
+
+        return (tx, ty, tz), (tqx, tqy, tqz, tqw)
+
+    def transform(self, pose: Pose) -> Dict[str, Any]:
+        """Transform a pose according to the configuration.
+
+        Args:
+            pose: Input pose from the phone/tracker.
+
+        Returns:
+            Dictionary with requested output formats. May include:
+            - absolute_input: Raw pose data
+            - delta_input: Position delta from origin (raw frame)
+            - absolute_transformed: Pose in target frame
+            - delta_transformed: Position and rotation deltas in target frame,
+              including rotation vector (rx, ry, rz) in radians for robot APIs.
+        """
+        # Reset origin on movement_start
+        if pose.movement_start:
+            self._origin = pose
+
+        absolute_input: Dict[str, Any] = {
+            "movement_start": pose.movement_start,
+            "x": pose.x,
+            "y": pose.y,
+            "z": pose.z,
+            "qx": pose.qx,
+            "qy": pose.qy,
+            "qz": pose.qz,
+            "qw": pose.qw,
+        }
+
+        if self.config.includeOrientation.get("euler_radian") or self.config.includeOrientation.get("euler_degree"):
+            absolute_input.update({
+                "x_rot": pose.x_rot,
+                "y_rot": pose.y_rot,
+                "z_rot": pose.z_rot,
+            })
+
+        delta_input = None
+        if self._origin is not None:
+            delta_input = {
+                "dx": pose.x - self._origin.x,
+                "dy": pose.y - self._origin.y,
+                "dz": pose.z - self._origin.z,
+            }
+
+        # Build target frame transform
+        (tx, ty, tz), target_q = self._build_target_frame_quat()
+        invT = (-target_q[0], -target_q[1], -target_q[2], target_q[3])
+
+        # Position in target: R_T^T * (p_ref - t)
+        px, py, pz = pose.x - tx, pose.y - ty, pose.z - tz
+        tposx, tposy, tposz = self._rotate_vector_by_quat((px, py, pz), invT)
+
+        # Orientation in target: qT^{-1} * q_ref
+        qrel = self._quat_multiply(invT, (pose.qx, pose.qy, pose.qz, pose.qw))
+
+        # Apply output axes and scale
+        absolute_transformed: Dict[str, Any] = {
+            "movement_start": pose.movement_start,
+            "x": self._apply_scale(tposx * self.config.outputAxes.get("x", 1)),
+            "y": self._apply_scale(tposy * self.config.outputAxes.get("y", 1)),
+            "z": self._apply_scale(tposz * self.config.outputAxes.get("z", 1)),
+            "qx": qrel[0],
+            "qy": qrel[1],
+            "qz": qrel[2],
+            "qw": qrel[3],
+        }
+
+        # Add rotation vector (axis-angle) representation
+        rx, ry, rz = tvm.quat_to_rotvec(qrel)
+        absolute_transformed.update({"rx": rx, "ry": ry, "rz": rz})
+
+        if self.config.includeOrientation.get("euler_radian"):
+            xr, yr, zr = self._quat_to_euler_xyz(qrel)
+            absolute_transformed.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+        if self.config.includeOrientation.get("euler_degree"):
+            xr, yr, zr = self._quat_to_euler_xyz(qrel)
+            absolute_transformed.update({
+                "x_rot_deg": (xr * 180.0 / math.pi),
+                "y_rot_deg": (yr * 180.0 / math.pi),
+                "z_rot_deg": (zr * 180.0 / math.pi),
+            })
+
+        delta_transformed = None
+        if self._origin is not None:
+            # Position delta
+            dx = pose.x - self._origin.x
+            dy = pose.y - self._origin.y
+            dz = pose.z - self._origin.z
+            # Rotate delta by inv target rotation, then scale/axes
+            ddx, ddy, ddz = self._rotate_vector_by_quat((dx, dy, dz), invT)
+
+            delta_transformed = {
+                "dx": self._apply_scale(ddx * self.config.outputAxes.get("x", 1)),
+                "dy": self._apply_scale(ddy * self.config.outputAxes.get("y", 1)),
+                "dz": self._apply_scale(ddz * self.config.outputAxes.get("z", 1)),
+            }
+
+            # Rotation delta: q_current * inv(q_origin) in transformed frame
+            origin_q = (self._origin.qx, self._origin.qy, self._origin.qz, self._origin.qw)
+            # Transform both to target frame first
+            origin_q_target = self._quat_multiply(invT, origin_q)
+            current_q_target = qrel  # already transformed
+
+            # Compute delta quaternion (base frame convention: q_delta = q_current * inv(q_origin))
+            q_delta = tvm.quat_delta(origin_q_target, current_q_target, frame="base")
+
+            delta_transformed.update({
+                "dqx": q_delta[0],
+                "dqy": q_delta[1],
+                "dqz": q_delta[2],
+                "dqw": q_delta[3],
+            })
+
+            # Rotation delta as rotation vector (axis-angle, radians)
+            drx, dry, drz = tvm.quat_to_rotvec(q_delta)
+            delta_transformed.update({"rx": drx, "ry": dry, "rz": drz})
+
+            # Current absolute orientation (for convenience)
+            delta_transformed.update({"qx": qrel[0], "qy": qrel[1], "qz": qrel[2], "qw": qrel[3]})
+
+            if self.config.includeOrientation.get("euler_radian"):
+                xr, yr, zr = self._quat_to_euler_xyz(qrel)
+                delta_transformed.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+            if self.config.includeOrientation.get("euler_degree"):
+                xr, yr, zr = self._quat_to_euler_xyz(qrel)
+                delta_transformed.update({
+                    "x_rot_deg": (xr * 180.0 / math.pi),
+                    "y_rot_deg": (yr * 180.0 / math.pi),
+                    "z_rot_deg": (zr * 180.0 / math.pi),
+                })
+
+        result: Dict[str, Any] = {}
+        if self.config.includeFormats.get("absolute_input"):
+            result["absolute_input"] = absolute_input
+        if self.config.includeFormats.get("delta_input") and delta_input is not None:
+            result["delta_input"] = delta_input
+        if self.config.includeFormats.get("absolute_transformed"):
+            result["absolute_transformed"] = absolute_transformed
+        if self.config.includeFormats.get("delta_transformed") and delta_transformed is not None:
+            result["delta_transformed"] = delta_transformed
+        return result

@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import signal
 import threading
 import time
@@ -8,15 +7,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from televoodoo import Pose, PoseTransformer, load_config
-from televoodoo.ble import run_simulation, start_peripheral
+from televoodoo import Pose, PoseProvider, load_config, start_televoodoo
+from televoodoo.ble import run_simulation
 
 
 class PoseRecorder:
     """Records poses between recording start/stop commands and saves on keep_recording."""
 
-    def __init__(self, transformer: PoseTransformer, output_dir: str = "."):
-        self.transformer = transformer
+    def __init__(self, pose_provider: PoseProvider, output_dir: str = "."):
+        self.pose_provider = pose_provider
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -33,7 +32,7 @@ class PoseRecorder:
 
     def handle_pose(self, pose: Pose) -> Dict[str, Any]:
         """Transform and optionally record a pose. Returns the transformed output."""
-        out = self.transformer.transform(pose)
+        out = self.pose_provider.transform(pose)
 
         with self._lock:
             if self._recording:
@@ -173,7 +172,7 @@ def main() -> int:
         "--name",
         type=str,
         default=None,
-        help="Static BLE peripheral name (default: randomly generated)",
+        help="Static peripheral name (default: randomly generated)",
     )
     parser.add_argument(
         "--code",
@@ -183,12 +182,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Build transformer from config
+    # Build pose provider from config
     cfg = load_config(args.config)
-    transformer = PoseTransformer(cfg)
+    pose_provider = PoseProvider(cfg)
 
     # Create recorder
-    recorder = PoseRecorder(transformer, output_dir=args.output_dir)
+    recorder = PoseRecorder(pose_provider, output_dir=args.output_dir)
 
     if not args.sim:  # Default to BLE mode
         # Graceful shutdown on Ctrl+C / SIGTERM
@@ -215,7 +214,7 @@ def main() -> int:
                 stop_run_loop()
             threading.Thread(target=timer_stop, daemon=True).start()
 
-        def on_ble_event(evt: Dict[str, Any]) -> None:
+        def on_teleop_event(evt: Dict[str, Any]) -> None:
             evt_type = evt.get("type")
 
             # Capture session name for filenames
@@ -226,22 +225,8 @@ def main() -> int:
 
             # Handle pose events
             elif evt_type == "pose":
-                ai = evt.get("data", {}).get("absolute_input", {})
-                try:
-                    pose = Pose(
-                        movement_start=bool(ai.get("movement_start", False)),
-                        x=float(ai.get("x", 0.0)),
-                        y=float(ai.get("y", 0.0)),
-                        z=float(ai.get("z", 0.0)),
-                        x_rot=float(ai.get("x_rot", 0.0)),
-                        y_rot=float(ai.get("y_rot", 0.0)),
-                        z_rot=float(ai.get("z_rot", 0.0)),
-                        qx=float(ai.get("qx", 0.0)),
-                        qy=float(ai.get("qy", 0.0)),
-                        qz=float(ai.get("qz", 0.0)),
-                        qw=float(ai.get("qw", 1.0)),
-                    )
-                except Exception:
+                pose = Pose.from_teleop_event(evt)
+                if pose is None:
                     return
                 out = recorder.handle_pose(pose)
                 # Log pose (with recording status)
@@ -269,12 +254,12 @@ def main() -> int:
 
         try:
             # CLI args override config file; config file overrides random
-            ble_name = args.name or cfg.ble_name
-            ble_code = args.code or cfg.ble_code
-            start_peripheral(on_ble_event, quiet=True, name=ble_name, code=ble_code)
+            auth_name = args.name or cfg.auth_name
+            auth_code = args.code or cfg.auth_code
+            start_televoodoo(on_teleop_event, quiet=True, name=auth_name, code=auth_code)
         except Exception as e:
             print(
-                json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}),
+                json.dumps({"type": "error", "message": f"Televoodoo failed: {e}"}),
                 flush=True,
             )
         return 0
@@ -330,4 +315,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

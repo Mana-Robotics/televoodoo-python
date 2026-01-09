@@ -165,13 +165,13 @@ Example console output:
 #### Integration Example
 
 ```python
-from televoodoo import Pose, PoseTransformer, load_config
+from televoodoo import Pose, PoseProvider, load_config
 from pose_recording import PoseRecorder
 
-# Create transformer and recorder
+# Create pose provider and recorder
 cfg = load_config("config.json")
-transformer = PoseTransformer(cfg)
-recorder = PoseRecorder(transformer, output_dir="./recordings")
+pose_provider = PoseProvider(cfg)
+recorder = PoseRecorder(pose_provider, output_dir="./recordings")
 
 # Set session name
 recorder.set_session_name("my_session")

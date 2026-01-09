@@ -182,7 +182,7 @@ start_peripheral(callback=handle_pose)
 ```
 
 
-## BLE Credentials
+## Authentication Credentials
 
 The BLE peripheral provides 2 options for the BLE Authentication credentials:
 
@@ -200,15 +200,17 @@ The BLE peripheral provides 2 options for the BLE Authentication credentials:
 
 ### Static Credentials
 
-Set via CLI flag
+Option 1: Set via CLI flag
 ```bash
 televoodoo --name myrobot --code ABC123
 ```
 
-Set in code
+Option 2: Set in code
 ```python
 start_peripheral(callback=handle_pose, name="myrobot", code="ABC123")
 ```
+
+Option 3: Set within [config file](#config-files)
 
 ## Troubleshooting
 
@@ -238,7 +240,7 @@ Config files define how poses are transformed from the ArUco marker frame to you
 
 ```json
 {
-  "ble": {
+  "authCredentials": {
     "name": "myrobot",
     "code": "ABC123"
   },
@@ -272,7 +274,7 @@ Config files define how poses are transformed from the ArUco marker frame to you
 
 | Section | Purpose |
 |---------|---------|
-| `ble` | BLE credentials: `name` (peripheral name) and `code` (6-char auth code) |
+| `authCredentials` | Connection credentials: `name` (peripheral name) and `code` (6-char auth code) |
 | `includeFormats` | Which pose formats to output (raw input, deltas, transformed) |
 | `includeOrientation` | Include quaternion, Euler radians, and/or Euler degrees |
 | `scale` | Scale factor applied to positions |
@@ -292,31 +294,27 @@ Config files define how poses are transformed from the ArUco marker frame to you
 ### Loading Config Files
 
 ```python
-from televoodoo import load_config, PoseTransformer
-from televoodoo.ble import start_peripheral
+from televoodoo import load_config, PoseProvider, start_televoodoo
 
 # Load config from file
 config = load_config("my_robot_config.json")
-transformer = PoseTransformer(config)
+pose_provider = PoseProvider(config)
 
-def handle_pose(pose_data):
-    # Transform pose using config
-    output = transformer.transform(pose_data)
+def on_teleop_event(evt):
+    # Get pose delta directly from event
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
+        return
     
-    # Access transformed data
-    if "absolute_transformed" in output:
-        pos = output["absolute_transformed"]
-        print(f"Transformed: x={pos['x']:.3f} y={pos['y']:.3f} z={pos['z']:.3f}")
-    
-    if "delta_transformed" in output:
-        delta = output["delta_transformed"]
-        print(f"Delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
+    # Access delta data for robot control
+    print(f"Delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
+    print(f"Rotation: rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
 
-# Use BLE credentials from config (if specified), or fall back to random
-start_peripheral(
-    callback=handle_pose,
-    name=config.ble_name,  # None = random
-    code=config.ble_code   # None = random
+# Use credentials from config (if specified), or fall back to random
+start_televoodoo(
+    callback=on_teleop_event,
+    name=config.auth_name,  # None = random
+    code=config.auth_code   # None = random
 )
 ```
 

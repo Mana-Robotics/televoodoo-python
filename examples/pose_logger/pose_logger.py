@@ -6,8 +6,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from televoodoo import Pose, PoseTransformer, load_config
-from televoodoo.ble import run_simulation, start_peripheral
+from televoodoo import Pose, PoseProvider, load_config, start_televoodoo
+from televoodoo.ble import run_simulation
 
 
 def main() -> int:
@@ -43,9 +43,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # Build transformer from config
+    # Build pose provider from config
     cfg = load_config(args.config)
-    transformer = PoseTransformer(cfg)
+    pose_provider = PoseProvider(cfg)
 
     if not args.sim:  # Default to BLE mode
         # Graceful shutdown on Ctrl+C / SIGTERM by stopping the CoreFoundation main run loop (macOS only)
@@ -72,39 +72,24 @@ def main() -> int:
                 stop_run_loop()
             threading.Thread(target=timer_stop, daemon=True).start()
 
-        def on_ble_event(evt: Dict[str, Any]) -> None:
-            if evt.get("type") == "pose":
-                ai = evt.get("data", {}).get("absolute_input", {})
-                try:
-                    pose = Pose(
-                        movement_start=bool(ai.get("movement_start", False)),
-                        x=float(ai.get("x", 0.0)),
-                        y=float(ai.get("y", 0.0)),
-                        z=float(ai.get("z", 0.0)),
-                        x_rot=float(ai.get("x_rot", 0.0)),
-                        y_rot=float(ai.get("y_rot", 0.0)),
-                        z_rot=float(ai.get("z_rot", 0.0)),
-                        qx=float(ai.get("qx", 0.0)),
-                        qy=float(ai.get("qy", 0.0)),
-                        qz=float(ai.get("qz", 0.0)),
-                        qw=float(ai.get("qw", 1.0)),
-                    )
-                except Exception:
-                    return
-                out = transformer.transform(pose)
-                print(json.dumps(out), flush=True)
+        def on_teleop_event(evt: Dict[str, Any]) -> None:
+            pose = Pose.from_teleop_event(evt)
+            if pose is None:
+                return
+            out = pose_provider.transform(pose)
+            print(json.dumps(out), flush=True)
 
         try:
             # CLI args override config file; config file overrides random
-            ble_name = args.name or cfg.ble_name
-            ble_code = args.code or cfg.ble_code
-            start_peripheral(on_ble_event, quiet=True, name=ble_name, code=ble_code)
+            auth_name = args.name or cfg.auth_name
+            auth_code = args.code or cfg.auth_code
+            start_televoodoo(on_teleop_event, quiet=True, name=auth_name, code=auth_code)
         except Exception as e:
-            print(json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}), flush=True)
+            print(json.dumps({"type": "error", "message": f"Televoodoo failed: {e}"}), flush=True)
         return 0
     else:  # sim
         def on_pose(pose: Pose) -> None:
-            out = transformer.transform(pose)
+            out = pose_provider.transform(pose)
             print(json.dumps(out), flush=True)
 
         if args.duration is not None:
@@ -121,5 +106,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

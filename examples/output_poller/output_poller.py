@@ -6,8 +6,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from televoodoo import Pose, PoseTransformer, load_config
-from televoodoo.ble import generate_session, start_peripheral
+from televoodoo import Pose, PoseProvider, load_config, start_televoodoo
 
 
 def main() -> int:
@@ -16,41 +15,23 @@ def main() -> int:
     parser.add_argument("--hz", type=float, default=5.0, help="Polling frequency in Hz (default 5)")
     args = parser.parse_args()
 
-    # start_peripheral prints session + QR and starts BLE
-
-    # Load config and create transformer
+    # Load config and create pose provider
     voodoo_config = load_config(args.config)
-    voodoo_transformer = PoseTransformer(voodoo_config)
+    pose_provider = PoseProvider(voodoo_config)
 
     # Shared latest pose
     voodoo_latest_pose: Dict[str, Any] = {}
     voodoo_latest_pose_lock = threading.Lock()
 
-    # BLE event callback: feed incoming poses into transformer; mirror events to stdout
-    def evt_cb(evt: Dict[str, Any]) -> None:
-        # print(json.dumps(evt), flush=True)  # comment out verbose input logging
-        if evt.get("type") == "pose":
-            ai = evt.get("data", {}).get("absolute_input", {})
-            try:
-                pose = Pose(
-                    movement_start=bool(ai.get("movement_start", False)),
-                    x=float(ai.get("x", 0.0)),
-                    y=float(ai.get("y", 0.0)),
-                    z=float(ai.get("z", 0.0)),
-                    x_rot=float(ai.get("x_rot", 0.0)),
-                    y_rot=float(ai.get("y_rot", 0.0)),
-                    z_rot=float(ai.get("z_rot", 0.0)),
-                    qx=float(ai.get("qx", 0.0)),
-                    qy=float(ai.get("qy", 0.0)),
-                    qz=float(ai.get("qz", 0.0)),
-                    qw=float(ai.get("qw", 1.0)),
-                )
-            except Exception:
-                return
-            out = voodoo_transformer.transform(pose)
-            with voodoo_latest_pose_lock:
-                voodoo_latest_pose.clear()
-                voodoo_latest_pose.update(out)
+    # Teleoperation event callback: feed incoming poses into provider
+    def on_teleop_event(evt: Dict[str, Any]) -> None:
+        pose = Pose.from_teleop_event(evt)
+        if pose is None:
+            return
+        out = pose_provider.transform(pose)
+        with voodoo_latest_pose_lock:
+            voodoo_latest_pose.clear()
+            voodoo_latest_pose.update(out)
 
     # Poller at requested frequency (background thread)
     period = 1.0 / max(0.1, float(args.hz))
@@ -85,19 +66,17 @@ def main() -> int:
         signal.signal(signal.SIGTERM, lambda *_: stop_run_loop())
 
     try:
-        # Use BLE credentials from config if specified
-        start_peripheral(
-            evt_cb,
+        # Use credentials from config if specified
+        start_televoodoo(
+            on_teleop_event,
             quiet=True,
-            name=voodoo_config.ble_name,
-            code=voodoo_config.ble_code
+            name=voodoo_config.auth_name,
+            code=voodoo_config.auth_code
         )
     except Exception as e:
-        print(json.dumps({"type": "error", "message": f"BLE peripheral failed: {e}"}), flush=True)
+        print(json.dumps({"type": "error", "message": f"Televoodoo failed: {e}"}), flush=True)
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

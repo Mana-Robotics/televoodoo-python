@@ -256,18 +256,20 @@ Monitor the terminal output for:
 Televoodoo Python includes utilities for coordinate system transformations:
 
 ```python
-from televoodoo.transform import apply_transform
-from televoodoo.pose import Pose
+from televoodoo import PoseProvider, load_config
 
-def my_pose_handler(pose_data):
-    # Create a Pose object
-    pose = Pose.from_dict(pose_data)
+# Load config with coordinate transforms
+config = load_config("robot_config.json")
+pose_provider = PoseProvider(config)
+
+def on_teleop_event(evt):
+    # Get transformed delta directly
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
+        return
     
-    # Apply transforms if needed (e.g., for your robot's coordinate system)
-    transformed = apply_transform(pose, your_transform_config)
-    
-    # Use the transformed pose
-    control_robot(transformed)
+    # Use the transformed delta for robot control
+    control_robot(delta)
 ```
 
 See the `examples/` directory for complete implementations.
