@@ -315,8 +315,22 @@ class PeripheralDelegate(NSObject):
 
 
 def run_macos_peripheral(name: str, expected_code: str, callback=None):
+    import signal
+    
     delegate = PeripheralDelegate.alloc().init().setup_(expected_code, callback)
     delegate.local_name = name
+    
+    # Handle SIGTERM for graceful shutdown (sent by Tauri on app close)
+    def handle_sigterm(signum, frame):
+        try:
+            from PyObjCTools import AppHelper
+            AppHelper.stopEventLoop()
+        except Exception:
+            pass
+        raise SystemExit(0)
+    
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    
     # Prefer a console-friendly event loop that respects Ctrl+C; fallback to NSRunLoop
     try:
         from PyObjCTools import AppHelper  # type: ignore
