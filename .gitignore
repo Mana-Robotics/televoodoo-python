@@ -236,4 +236,5 @@ $RECYCLE.BIN/
 *.tmp
 *.temp
 *.png
+!assets/**/*.png
 recordings/

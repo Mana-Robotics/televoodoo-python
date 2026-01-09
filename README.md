@@ -1,4 +1,6 @@
-# Televoodoo Python
+<p align="center">
+  <img src="assets/Televoodoo-Python-Banner.png" alt="Televoodoo Viewer screenshot" />
+</p>
 
 **Televoodoo Python** enables your Python project to receive real-time **6DoF** pose data from any smartphone running the Televoodoo App — perfect for **Robot Teleoperation**, **3D object manipulation**, **VR motion control**, and more.
 
