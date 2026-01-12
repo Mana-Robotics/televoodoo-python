@@ -1,8 +1,10 @@
-# Televoodoo Python - BLE Peripheral API
+# Televoodoo BLE Peripheral API
 
 ## Overview
 
-Televoodoo Python creates a Bluetooth Low Energy (BLE) peripheral that the Televoodoo App (iOS/Android) connects to. This document describes the BLE service structure that Televoodoo Python exposes, which you can use in your applications to receive real-time 6DoF pose data from smartphones.
+Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This spec uses **binary data format** for pose and command data, matching the WiFi protocol for code reuse.
+
+---
 
 ## BLE Service Configuration
 
@@ -11,147 +13,238 @@ Televoodoo Python creates a Bluetooth Low Energy (BLE) peripheral that the Telev
 1C8FD138-FC18-4846-954D-E509366AEF61
 ```
 
-### Characteristics
+### Characteristics Summary
 
-Televoodoo Python creates the following BLE characteristics:
+| # | Name | UUID Suffix | Properties | Format |
+|---|------|-------------|------------|--------|
+| 1 | Authentication | `...AEF63` | Write | 6-char string |
+| 2 | Pose Data | `...AEF64` | Write, WriteWithoutResponse | Binary |
+| 3 | Heartbeat | `...AEF65` | Read, Notify | Binary |
+| 4 | Command Data | `...AEF66` | Write, WriteWithoutResponse | Binary |
 
-#### 1. Authentication Characteristic
+---
+
+## Binary Protocol (Shared with WiFi)
+
+All binary messages use **little-endian** byte order.
+
+### Common Header (6 bytes)
+
+| Offset | Field | Type | Description |
+|--------|-------|------|-------------|
+| 0 | `magic` | `char[4]` | `"TELE"` |
+| 4 | `msg_type` | `uint8` | Message type ID |
+| 5 | `version` | `uint8` | Protocol version (`1`) |
+
+### Message Types (BLE subset)
+
+| ID | Name | Direction | Characteristic |
+|----|------|-----------|----------------|
+| 3 | POSE | iPhone → PC | Pose Data |
+| 5 | CMD | iPhone → PC | Command Data |
+| 6 | HEARTBEAT | PC → iPhone | Heartbeat |
+
+Note: HELLO/ACK/BYE (types 1, 2, 4) are not used in BLE—connection state is managed by the BLE stack.
+
+---
+
+## Characteristics Detail
+
+### 1. Authentication Characteristic
+
 - **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF63`
 - **Properties**: Write, WriteWithoutResponse
-- **Purpose**: Receives authentication codes from connecting devices
-- **Data Format**: UTF-8 string (6-character access code)
-- **Authentication Flow**:
-  1. The Televoodoo App connects to your peripheral
-  2. The app writes the access code to this characteristic
-  3. Televoodoo Python validates the code
-  4. If correct, the connection is authenticated for data exchange
+- **Format**: UTF-8 string (6-character code)
 
-#### 2. Pose Data Characteristic
+**Flow:**
+1. App connects to peripheral
+2. App writes 6-char code to this characteristic
+3. Python validates code
+4. If valid, pose data is accepted
+
+### 2. Pose Data Characteristic
+
 - **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF64`
 - **Properties**: Write, WriteWithoutResponse
-- **Purpose**: Receives 6DoF pose tracking data from the Televoodoo App
-- **Data Format**: UTF-8 JSON string
-- **Your Code**: Process incoming pose data in your callback function
+- **Format**: Binary POSE packet (46 bytes)
 
-#### 3. Heartbeat Characteristic
+#### POSE Packet (iPhone → PC)
+
+| Offset | Field | Type | Bytes |
+|--------|-------|------|-------|
+| 0 | header | - | 6 |
+| 6 | seq | `uint16` | 2 |
+| 8 | timestamp_us | `uint64` | 8 |
+| 16 | flags | `uint8` | 1 |
+| 17 | reserved | `uint8` | 1 |
+| 18 | x | `float32` | 4 |
+| 22 | y | `float32` | 4 |
+| 26 | z | `float32` | 4 |
+| 30 | qx | `float32` | 4 |
+| 34 | qy | `float32` | 4 |
+| 38 | qz | `float32` | 4 |
+| 42 | qw | `float32` | 4 |
+| **Total** | | | **46** |
+
+#### Flags Bitfield
+
+| Bit | Name | Description |
+|-----|------|-------------|
+| 0 | `movement_start` | New movement origin (reset deltas) |
+| 1-7 | reserved | Must be 0 |
+
+#### Python Struct
+
+```python
+POSE_FORMAT = "<4sBBHQBB7f"  # little-endian, 46 bytes
+```
+
+### 3. Heartbeat Characteristic
+
 - **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF65`
-- **Properties**: Read
-- **Purpose**: Provides connection health monitoring
-- **Data Format**: 4-byte little-endian UInt32 counter
-- **Behavior**: Auto-increments to help clients detect stale connections
+- **Properties**: Read, Notify
+- **Format**: Binary HEARTBEAT packet (14 bytes)
 
-#### 4. Command Data Characteristic
+#### HEARTBEAT Packet (PC → iPhone)
+
+| Offset | Field | Type | Bytes |
+|--------|-------|------|-------|
+| 0 | header | - | 6 |
+| 6 | counter | `uint32` | 4 |
+| 10 | uptime_ms | `uint32` | 4 |
+| **Total** | | | **14** |
+
+- `counter`: Increments with each heartbeat (rollover OK)
+- `uptime_ms`: Milliseconds since peripheral started
+
+**Liveness Detection:**
+- PC updates heartbeat at **2 Hz** (every 500ms)
+- iPhone subscribes to notifications
+- If no heartbeat update for **3 seconds** → PC disconnected (or app backgrounded)
+
+### 4. Command Data Characteristic
+
 - **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF66`
 - **Properties**: Write, WriteWithoutResponse
-- **Purpose**: Receives command data from the Televoodoo App
-- **Data Format**: UTF-8 JSON string with command name and value
+- **Format**: Binary CMD packet (8 bytes)
 
-##### Command JSON Format
-```json
+#### CMD Packet (iPhone → PC)
+
+| Offset | Field | Type | Bytes |
+|--------|-------|------|-------|
+| 0 | header | - | 6 |
+| 6 | cmd_type | `uint8` | 1 |
+| 7 | value | `uint8` | 1 |
+| **Total** | | | **8** |
+
+#### Command Types
+
+| ID | Name | Values |
+|----|------|--------|
+| 1 | RECORDING | `1`=start, `0`=stop |
+| 2 | KEEP_RECORDING | `1`=keep, `0`=discard |
+
+---
+
+## Disconnect Detection
+
+BLE provides connection state natively, but the heartbeat adds app-level liveness:
+
+| Direction | Mechanism | Timeout |
+|-----------|-----------|---------|
+| iPhone → PC | BLE disconnection event | Immediate |
+| PC → iPhone | BLE disconnection event OR heartbeat stops | 3 seconds |
+
+The 3-second heartbeat timeout catches cases where:
+- Python app crashes but OS keeps BLE connection alive briefly
+- Python app is suspended/paused
+
+---
+
+## Callback Event Format
+
+Same format as WiFi for compatibility:
+
+```python
+# Pose event
 {
-  "command_name": value
+    "type": "pose",
+    "data": {
+        "absolute_input": {
+            "movement_start": True,
+            "x": 0.1, "y": 0.2, "z": 0.05,
+            "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0,
+        }
+    }
 }
+
+# Command event
+{"type": "command", "name": "recording", "value": True}
+
+# Connection events
+{"type": "ble_connected"}
+{"type": "ble_authenticated"}
+{"type": "ble_disconnected"}
 ```
 
-##### Supported Commands
-| Command Name | Value Type | Description |
-|-------------|------------|-------------|
-| `recording` | boolean | Indicates recording start (`true`) or stop (`false`) |
-| `keep_recording` | boolean | Indicates whether to keep (`true`) or discard (`false`) the recording |
+---
 
-##### Example Command Payloads
+## Shared Parsing Code
 
-**Recording Started**
-```json
-{"recording":true}
+Both BLE and WiFi use the same binary parsing (see `protocol.py`):
+
+```python
+import struct
+
+HEADER_FORMAT = "<4sBB"  # magic, msg_type, version
+POSE_FORMAT = "<4sBBHQBB7f"
+CMD_FORMAT = "<4sBBBB"
+HEARTBEAT_FORMAT = "<4sBBII"
+
+def parse_pose(data: bytes) -> dict:
+    """Parse POSE packet to dict matching callback format."""
+    magic, msg_type, version, seq, ts, flags, _, x, y, z, qx, qy, qz, qw = \
+        struct.unpack(POSE_FORMAT, data)
+    
+    if magic != b"TELE" or msg_type != 3:
+        raise ValueError("Invalid POSE packet")
+    
+    return {
+        "movement_start": bool(flags & 0x01),
+        "x": x, "y": y, "z": z,
+        "qx": qx, "qy": qy, "qz": qz, "qw": qw,
+        "seq": seq,
+        "timestamp_us": ts,
+    }
+
+def pack_heartbeat(counter: int, uptime_ms: int) -> bytes:
+    """Pack HEARTBEAT packet for BLE characteristic."""
+    return struct.pack(HEARTBEAT_FORMAT, b"TELE", 6, 1, counter, uptime_ms)
 ```
 
-**Recording Stopped**
-```json
-{"recording":false}
-```
-
-**Keep Recording**
-```json
-{"keep_recording":true}
-```
-
-**Discard Recording**
-```json
-{"keep_recording":false}
-```
-
-## Pose Data Payload
-
-### JSON Structure Received
-
-Your callback function receives pose data in the following format:
-
-```json
-{
-  "movement_start": true|false,
-  "x": 0.0,
-  "y": 0.0,
-  "z": 0.0,
-  "x_rot": 0.0,
-  "y_rot": 0.0,
-  "z_rot": 0.0,
-  "qx": 0.0,
-  "qy": 0.0,
-  "qz": 0.0,
-  "qw": 1.0
-}
-```
-
-### Field Descriptions
-- **movement_start** (boolean): When `true`, sets this pose as the new origin for delta calculations
-- **x, y, z** (double): Position in meters relative to the reference coordinate system
-- **x_rot, y_rot, z_rot** (double): Euler angles in degrees
-- **qx, qy, qz, qw** (double): Quaternion components (normalized)
-
-### Example: New Movement Start
-```json
-{
-  "movement_start": true,
-  "x": 0.1,
-  "y": 0.2,
-  "z": 0.05,
-  "x_rot": 45.0,
-  "y_rot": -30.5,
-  "z_rot": 15.25,
-  "qx": 0.01234,
-  "qy": -0.56789,
-  "qz": 0.12345,
-  "qw": 0.81234
-}
-```
-
-### Example: Continuous Movement
-```json
-{
-  "movement_start": false,
-  "x": 0.12,
-  "y": 0.22,
-  "z": 0.07,
-  "x_rot": 46.0,
-  "y_rot": -29.5,
-  "z_rot": 16.0,
-  "qx": 0.01334,
-  "qy": -0.56689,
-  "qz": 0.12445,
-  "qw": 0.81134
-}
-```
+---
 
 ## Connection Flow
 
-1. **Your Python app starts**: Televoodoo Python creates a BLE peripheral
-2. **QR code displayed**: Shows connection info (peripheral name + access code)
-3. **User scans QR code**: Using the Televoodoo App on their smartphone
-4. **App connects**: Automatically discovers and connects to your peripheral
-5. **Authentication**: App sends the access code
-6. **Pose streaming begins**: Your callback receives real-time pose data
-7. **Your app processes**: Use the pose data for your application logic
+1. **Python app starts**: Creates BLE peripheral, starts advertising
+2. **QR code displayed**: Shows peripheral name + 6-char code
+3. **User scans QR**: Televoodoo App discovers and connects
+4. **Authentication**: App writes code to Auth characteristic
+5. **Heartbeat starts**: Python updates heartbeat at 2 Hz
+6. **Pose streaming**: App writes binary POSE packets
+7. **Commands**: App writes binary CMD packets as needed
+8. **Disconnect**: BLE disconnection OR heartbeat timeout
 
+---
 
+## Packet Size Considerations
 
+BLE MTU is typically 20-512 bytes depending on negotiation. The packets are designed to fit comfortably:
+
+| Packet | Size | Fits in minimum MTU (20 bytes)? |
+|--------|------|---------------------------------|
+| POSE | 46 bytes | No (needs MTU negotiation) |
+| CMD | 8 bytes | Yes |
+| HEARTBEAT | 14 bytes | Yes |
+
+**Recommendation**: iOS app should request MTU ≥ 64 bytes during connection. Most modern devices support 185+ bytes.

@@ -1,11 +1,11 @@
-"""WIFI connection backend for Televoodoo.
+"""WiFi connection backend for Televoodoo.
 
 This module provides a WiFi/UDP-based connection alternative to BLE.
 The phone app connects over the local network via mDNS discovery.
 
-Implements the WIFI_API_v2.md specification:
+See WIFI_API.md for specification:
 - mDNS service advertisement (_televoodoo._udp.local.)
-- UDP binary protocol (same as BLE v2)
+- UDP binary protocol (same as BLE)
 - Single-client exclusive session
 - Bidirectional liveness detection (3-second timeout)
 """

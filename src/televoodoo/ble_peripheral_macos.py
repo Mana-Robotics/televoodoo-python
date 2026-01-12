@@ -1,15 +1,11 @@
-"""BLE peripheral implementation for macOS using CoreBluetooth.
-
-Supports both v1 (JSON) and v2 (binary) protocols for backwards compatibility.
-"""
+"""BLE peripheral implementation for macOS using CoreBluetooth."""
 
 import json
-import struct
 import threading
 import time
 
 import objc
-from Foundation import NSObject, NSData, NSUUID, NSRunLoop
+from Foundation import NSObject, NSData, NSRunLoop
 
 QUIET_HIGH_FREQUENCY = False
 
@@ -38,7 +34,7 @@ CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 
-# Heartbeat rate (v2 spec: 2 Hz for 3-second timeout detection)
+# Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
 
 
@@ -55,7 +51,7 @@ class PeripheralDelegate(NSObject):
         self._start_time = time.monotonic()
         self._hb_thread = None
         self._hb_char = None
-        self._cb = None  # optional callback to receive event dicts
+        self._cb = None
         return self
 
     def setup_(self, code, cb=None):
@@ -78,11 +74,9 @@ class PeripheralDelegate(NSObject):
             except Exception:
                 pass
 
-    # CBPeripheralManagerDelegate
     def peripheralManagerDidUpdateState_(self, peripheralManager):
         state = peripheralManager.state()
-        # 5 is PoweredOn
-        if state == 5:
+        if state == 5:  # PoweredOn
             self._create_services()
         else:
             self.emitEvent_({"type": "ble_state", "state": int(state)})
@@ -146,20 +140,19 @@ class PeripheralDelegate(NSObject):
         })
         self.emitEvent_({"type": "ble_advertising", "name": self._local_name()})
         
-        # Start heartbeat thread (v2: 2 Hz with binary format)
+        # Start heartbeat thread (2 Hz)
         self._start_time = time.monotonic()
         self._hb_thread = threading.Thread(target=self._hb_loop, daemon=True)
         self._hb_thread.start()
 
     def _hb_loop(self):
-        """Heartbeat loop - v2 spec: 2 Hz with binary format."""
+        """Heartbeat loop - 2 Hz with binary format."""
         while True:
             self.heartbeat_counter = (self.heartbeat_counter + 1) & 0xFFFFFFFF
             uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
             
             try:
                 if self._hb_char is not None:
-                    # v2 binary heartbeat format
                     b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
                     val = NSData.dataWithBytes_length_(b, len(b))
                     self.pm.updateValue_forCharacteristic_onSubscribedCentrals_(val, self._hb_char, None)
@@ -173,47 +166,21 @@ class PeripheralDelegate(NSObject):
         return self.local_name
 
     def _handle_pose_write(self, data: bytes):
-        """Handle pose data - supports both v1 (JSON) and v2 (binary)."""
-        if protocol.is_binary_protocol(data):
-            # v2 binary format
-            pose = protocol.parse_pose(data)
-            if pose:
-                self.emitEvent_(protocol.pose_to_event(pose))
-            else:
-                self.emitEvent_({"type": "error", "message": "Invalid v2 POSE packet"})
+        """Handle binary pose data."""
+        pose = protocol.parse_pose(data)
+        if pose:
+            self.emitEvent_(protocol.pose_to_event(pose))
         else:
-            # v1 JSON format (backwards compatibility)
-            try:
-                js = data.decode("utf-8")
-                raw = json.loads(js)
-                self.emitEvent_({"type": "pose", "data": {"absolute_input": raw}})
-            except Exception as e:
-                self.emitEvent_({"type": "error", "message": f"pose json: {e}"})
+            self.emitEvent_({"type": "error", "message": "Invalid POSE packet"})
 
     def _handle_command_write(self, data: bytes):
-        """Handle command data - supports both v1 (JSON) and v2 (binary)."""
-        if protocol.is_binary_protocol(data):
-            # v2 binary format
-            cmd = protocol.parse_cmd(data)
-            if cmd:
-                self.emitEvent_(protocol.cmd_to_event(cmd))
-            else:
-                self.emitEvent_({"type": "error", "message": "Invalid v2 CMD packet"})
+        """Handle binary command data."""
+        cmd = protocol.parse_cmd(data)
+        if cmd:
+            self.emitEvent_(protocol.cmd_to_event(cmd))
         else:
-            # v1 JSON format (backwards compatibility)
-            try:
-                js = data.decode("utf-8")
-                cmd_data = json.loads(js)
-                if "recording" in cmd_data:
-                    self.emitEvent_({"type": "command", "name": "recording", "value": bool(cmd_data["recording"])})
-                elif "keep_recording" in cmd_data:
-                    self.emitEvent_({"type": "command", "name": "keep_recording", "value": bool(cmd_data["keep_recording"])})
-                else:
-                    self.emitEvent_({"type": "command", "data": cmd_data})
-            except Exception as e:
-                self.emitEvent_({"type": "error", "message": f"command json: {e}"})
+            self.emitEvent_({"type": "error", "message": "Invalid CMD packet"})
 
-    # Writes
     def peripheralManager_didReceiveWriteRequests_(self, peripheral, requests):
         for req in requests:
             uuid = req.characteristic().UUID().UUIDString()
@@ -243,7 +210,6 @@ class PeripheralDelegate(NSObject):
                 
         peripheral.respondToRequest_withResult_(requests[-1], CBATTErrorSuccess)
 
-    # Subscriptions
     def peripheralManager_central_didSubscribeToCharacteristic_(self, pm, central, characteristic):
         try:
             uuid = characteristic.UUID().UUIDString()
@@ -258,7 +224,6 @@ class PeripheralDelegate(NSObject):
         except Exception:
             pass
 
-    # Service add / advertising callbacks
     def peripheralManager_didAddService_error_(self, pm, service, error):
         msg = {"type": "ble_service_added", "uuid": service.UUID().UUIDString()}
         if error is not None:
@@ -271,12 +236,10 @@ class PeripheralDelegate(NSObject):
             msg["error"] = str(error)
         self.emitEvent_(msg)
 
-    # Reads (heartbeat)
     def peripheralManager_didReceiveReadRequest_(self, peripheral, request):
         uuid = request.characteristic().UUID().UUIDString()
         if uuid == CHAR_HEARTBEAT_UUID:
             uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
-            # v2 binary heartbeat format
             b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
             request.setValue_(NSData.dataWithBytes_length_(b, len(b)))
             peripheral.respondToRequest_withResult_(request, CBATTErrorSuccess)
@@ -292,7 +255,6 @@ def run_macos_peripheral(name: str, expected_code: str, callback=None):
     delegate = PeripheralDelegate.alloc().init().setup_(expected_code, callback)
     delegate.local_name = name
     
-    # Handle SIGTERM for graceful shutdown (sent by Tauri on app close)
     def handle_sigterm(signum, frame):
         try:
             from PyObjCTools import AppHelper
@@ -303,11 +265,8 @@ def run_macos_peripheral(name: str, expected_code: str, callback=None):
     
     signal.signal(signal.SIGTERM, handle_sigterm)
     
-    # Prefer a console-friendly event loop that respects Ctrl+C; fallback to NSRunLoop
     try:
-        from PyObjCTools import AppHelper  # type: ignore
-        # installInterrupt=True makes Ctrl+C (SIGINT) stop the event loop
+        from PyObjCTools import AppHelper
         AppHelper.runConsoleEventLoop(installInterrupt=True)
     except Exception:
-        # Fallback if AppHelper is unavailable
         NSRunLoop.mainRunLoop().run()

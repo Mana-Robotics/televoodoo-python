@@ -1,8 +1,8 @@
-"""Televoodoo binary protocol - shared by BLE and WIFI transports.
+"""Televoodoo binary protocol - shared by BLE and WiFi transports.
 
-This module implements the v2 binary protocol as specified in:
-- BLE_PERIPHERAL_API_v2.md
-- WIFI_API_v2.md
+See documentation:
+- BLE_PERIPHERAL_API.md
+- WIFI_API.md
 
 All messages use little-endian byte order.
 """
@@ -202,7 +202,7 @@ def parse_cmd(data: bytes) -> Optional[CmdMsg]:
 
 
 def is_binary_protocol(data: bytes) -> bool:
-    """Check if data starts with the TELE magic bytes (v2 protocol)."""
+    """Check if data starts with the TELE magic bytes."""
     return len(data) >= 4 and data[:4] == MAGIC
 
 

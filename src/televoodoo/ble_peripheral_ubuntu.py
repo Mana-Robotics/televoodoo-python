@@ -1,10 +1,6 @@
-"""BLE peripheral implementation for Ubuntu using BlueZ (via bluezero).
-
-Supports both v1 (JSON) and v2 (binary) protocols for backwards compatibility.
-"""
+"""BLE peripheral implementation for Ubuntu using BlueZ (via bluezero)."""
 
 import json
-import struct
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
@@ -25,7 +21,7 @@ CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 
-# Heartbeat rate (v2 spec: 2 Hz for 3-second timeout detection)
+# Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
 
 _evt_cb: Optional[Callable[[Dict[str, Any]], None]] = None
@@ -136,14 +132,14 @@ class UbuntuPeripheral:
         )
 
     def _hb_read(self) -> list[int]:
-        """Handle heartbeat read - v2 binary format."""
+        """Handle heartbeat read - binary format."""
         uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
         b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
         emit_event({"type": "heartbeat"})
         return list(b)
 
     def _hb_notify(self) -> list[int]:
-        """Handle heartbeat notify - v2 binary format."""
+        """Handle heartbeat notify - binary format."""
         uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
         b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
         return list(b)
@@ -168,52 +164,31 @@ class UbuntuPeripheral:
             emit_event({"type": "error", "message": f"control write: {e}"})
 
     def _pose_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
-        """Handle pose data - supports both v1 (JSON) and v2 (binary)."""
+        """Handle binary pose data."""
         try:
             buf = bytes(value) if not isinstance(value, (bytes, bytearray)) else value
-            
-            if protocol.is_binary_protocol(buf):
-                # v2 binary format
-                pose = protocol.parse_pose(buf)
-                if pose:
-                    emit_event(protocol.pose_to_event(pose))
-                else:
-                    emit_event({"type": "error", "message": "Invalid v2 POSE packet"})
+            pose = protocol.parse_pose(buf)
+            if pose:
+                emit_event(protocol.pose_to_event(pose))
             else:
-                # v1 JSON format (backwards compatibility)
-                js = buf.decode('utf-8')
-                raw = json.loads(js)
-                emit_event({"type": "pose", "data": {"absolute_input": raw}})
+                emit_event({"type": "error", "message": "Invalid POSE packet"})
         except Exception as e:
             emit_event({"type": "error", "message": f"pose write: {e}"})
 
     def _command_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
-        """Handle command data - supports both v1 (JSON) and v2 (binary)."""
+        """Handle binary command data."""
         try:
             buf = bytes(value) if not isinstance(value, (bytes, bytearray)) else value
-            
-            if protocol.is_binary_protocol(buf):
-                # v2 binary format
-                cmd = protocol.parse_cmd(buf)
-                if cmd:
-                    emit_event(protocol.cmd_to_event(cmd))
-                else:
-                    emit_event({"type": "error", "message": "Invalid v2 CMD packet"})
+            cmd = protocol.parse_cmd(buf)
+            if cmd:
+                emit_event(protocol.cmd_to_event(cmd))
             else:
-                # v1 JSON format (backwards compatibility)
-                js = buf.decode('utf-8')
-                cmd_data = json.loads(js)
-                if "recording" in cmd_data:
-                    emit_event({"type": "command", "name": "recording", "value": bool(cmd_data["recording"])})
-                elif "keep_recording" in cmd_data:
-                    emit_event({"type": "command", "name": "keep_recording", "value": bool(cmd_data["keep_recording"])})
-                else:
-                    emit_event({"type": "command", "data": cmd_data})
+                emit_event({"type": "error", "message": "Invalid CMD packet"})
         except Exception as e:
             emit_event({"type": "error", "message": f"command write: {e}"})
 
     def _hb_loop(self) -> None:
-        """Heartbeat loop - v2 spec: 2 Hz."""
+        """Heartbeat loop - 2 Hz."""
         while True:
             try:
                 self.heartbeat_counter = (self.heartbeat_counter + 1) & 0xFFFFFFFF
@@ -231,7 +206,7 @@ class UbuntuPeripheral:
         emit_event({"type": "ble_advertising", "name": self.name})
         emit_event({"type": "ble_advertising_started"})
         
-        # Start heartbeat thread (v2: 2 Hz)
+        # Start heartbeat thread (2 Hz)
         self._start_time = time.monotonic()
         self._hb_thread = threading.Thread(target=self._hb_loop, daemon=True)
         self._hb_thread.start()

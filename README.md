@@ -385,8 +385,8 @@ For in-depth technical details, see `docs/`:
 
 - **[Pose Data Format](docs/POSE_DATA_FORMAT.md)** — Coordinate systems, field descriptions, validation
 - **[Connection Setup](docs/CONNECTION_SETUP.md)** — QR codes, credentials, multi-device setup
-- **[WiFi API](docs/WIFI_API_v2.md)** — UDP protocol, mDNS discovery (default connection)
-- **[BLE Peripheral API](docs/BLE_PERIPHERAL_API_v2.md)** — Service UUIDs, characteristics, protocol details
+- **[WiFi API](docs/WIFI_API.md)** — UDP protocol, mDNS discovery (default connection)
+- **[BLE Peripheral API](docs/BLE_PERIPHERAL_API.md)** — Service UUIDs, characteristics, protocol details
 
 
 ## Contributing
