@@ -1,7 +1,7 @@
 """Televoodoo binary protocol - shared by BLE and WiFi transports.
 
 See documentation:
-- BLE_PERIPHERAL_API.md
+- BLE_API.md
 - WIFI_API.md
 
 All messages use little-endian byte order.

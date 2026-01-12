@@ -368,7 +368,7 @@ Everyone on the team can connect their phones using the same credentials.
 ## See Also
 
 - **WIFI_API.md**: Technical details on the WiFi/UDP protocol (default)
-- **BLE_PERIPHERAL_API.md**: Technical details on the BLE service
+- **BLE_API.md**: Technical details on the BLE service
 - **POSE_DATA_FORMAT.md**: What data your callback receives
 - **examples/**: Sample applications showing complete workflows
 

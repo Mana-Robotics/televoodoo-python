@@ -286,7 +286,7 @@ Use the **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer
 
 ## See Also
 
-- **BLE_PERIPHERAL_API.md**: Details on the BLE service and characteristics
+- **BLE_API.md**: Details on the BLE service and characteristics
 - **examples/print_poses**: Print absolute poses
 - **examples/print_delta_poses**: Print pose deltas for robot teleoperation
 - **examples/record_poses**: Record poses to JSON file
