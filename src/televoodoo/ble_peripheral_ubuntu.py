@@ -1,3 +1,8 @@
+"""BLE peripheral implementation for Ubuntu using BlueZ (via bluezero).
+
+Supports both v1 (JSON) and v2 (binary) protocols for backwards compatibility.
+"""
+
 import json
 import struct
 import threading
@@ -11,6 +16,7 @@ import tty
 
 from bluezero import adapter, peripheral  # type: ignore
 
+from . import protocol
 
 SERVICE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF61"
 CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
@@ -19,18 +25,21 @@ CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 
+# Heartbeat rate (v2 spec: 2 Hz for 3-second timeout detection)
+HEARTBEAT_INTERVAL = 0.5
 
 _evt_cb: Optional[Callable[[Dict[str, Any]], None]] = None
 QUIET_HIGH_FREQUENCY = False
 
 
 def emit_event(evt: Dict[str, Any]) -> None:
-    # Suppress high-frequency spam if requested, but keep session/connection events
+    """Emit event to callback and optionally print."""
     kind = evt.get("type")
     if QUIET_HIGH_FREQUENCY and kind in {"pose", "heartbeat"}:
         pass
     else:
         print(json.dumps(evt), flush=True)
+    
     cb = _evt_cb
     if cb is not None:
         try:
@@ -44,6 +53,7 @@ class UbuntuPeripheral:
         self.name = name
         self.expected_code = expected_code
         self.heartbeat_counter = 0
+        self._start_time = time.monotonic()
         self._hb_thread: Optional[threading.Thread] = None
 
         # Adapter
@@ -54,13 +64,12 @@ class UbuntuPeripheral:
         addr = getattr(first, 'address', first)
         self.adapter = adapter.Adapter(addr)
         if not self.adapter.powered:
-            # Do not try to power on automatically; instruct the user
             emit_event({"type": "warn", "message": "Bluetooth adapter is off. Run 'bluetoothctl power on' and retry."})
 
-        # Bluezero Peripheral: adapter address first arg
+        # Bluezero Peripheral
         self.ble = peripheral.Peripheral(self.adapter.address, local_name=self.name)
 
-        # Create service and characteristics via high-level API
+        # Create service and characteristics
         self.srv_id = 1
         self.hb_id = 1
         self.auth_id = 2
@@ -126,14 +135,17 @@ class UbuntuPeripheral:
             write_callback=self._command_write,
         )
 
-    # Callbacks
     def _hb_read(self) -> list[int]:
-        b = struct.pack('<I', self.heartbeat_counter)
+        """Handle heartbeat read - v2 binary format."""
+        uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
+        b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
         emit_event({"type": "heartbeat"})
         return list(b)
 
     def _hb_notify(self) -> list[int]:
-        b = struct.pack('<I', self.heartbeat_counter)
+        """Handle heartbeat notify - v2 binary format."""
+        uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
+        b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
         return list(b)
 
     def _auth_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
@@ -156,46 +168,60 @@ class UbuntuPeripheral:
             emit_event({"type": "error", "message": f"control write: {e}"})
 
     def _pose_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
+        """Handle pose data - supports both v1 (JSON) and v2 (binary)."""
         try:
             buf = bytes(value) if not isinstance(value, (bytes, bytearray)) else value
-            js = buf.decode('utf-8')
-            try:
+            
+            if protocol.is_binary_protocol(buf):
+                # v2 binary format
+                pose = protocol.parse_pose(buf)
+                if pose:
+                    emit_event(protocol.pose_to_event(pose))
+                else:
+                    emit_event({"type": "error", "message": "Invalid v2 POSE packet"})
+            else:
+                # v1 JSON format (backwards compatibility)
+                js = buf.decode('utf-8')
                 raw = json.loads(js)
                 emit_event({"type": "pose", "data": {"absolute_input": raw}})
-            except Exception as e:
-                emit_event({"type": "error", "message": f"pose json: {e}"})
         except Exception as e:
             emit_event({"type": "error", "message": f"pose write: {e}"})
 
     def _command_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
+        """Handle command data - supports both v1 (JSON) and v2 (binary)."""
         try:
             buf = bytes(value) if not isinstance(value, (bytes, bytearray)) else value
-            js = buf.decode('utf-8')
-            try:
+            
+            if protocol.is_binary_protocol(buf):
+                # v2 binary format
+                cmd = protocol.parse_cmd(buf)
+                if cmd:
+                    emit_event(protocol.cmd_to_event(cmd))
+                else:
+                    emit_event({"type": "error", "message": "Invalid v2 CMD packet"})
+            else:
+                # v1 JSON format (backwards compatibility)
+                js = buf.decode('utf-8')
                 cmd_data = json.loads(js)
-                # Handle supported commands: recording, keep_recording
                 if "recording" in cmd_data:
                     emit_event({"type": "command", "name": "recording", "value": bool(cmd_data["recording"])})
                 elif "keep_recording" in cmd_data:
                     emit_event({"type": "command", "name": "keep_recording", "value": bool(cmd_data["keep_recording"])})
                 else:
                     emit_event({"type": "command", "data": cmd_data})
-            except Exception as e:
-                emit_event({"type": "error", "message": f"command json: {e}"})
         except Exception as e:
             emit_event({"type": "error", "message": f"command write: {e}"})
 
     def _hb_loop(self) -> None:
+        """Heartbeat loop - v2 spec: 2 Hz."""
         while True:
             try:
                 self.heartbeat_counter = (self.heartbeat_counter + 1) & 0xFFFFFFFF
                 try:
-                    # Bluezero will call our notify callback to fetch value
                     self.ble.send_notify(self.srv_id, self.hb_id)
-                    emit_event({"type": "heartbeat"})
                 except Exception:
                     pass
-                time.sleep(1.0)
+                time.sleep(HEARTBEAT_INTERVAL)
             except Exception as e:
                 emit_event({"type": "error", "message": f"hb_loop: {e}"})
 
@@ -204,21 +230,26 @@ class UbuntuPeripheral:
         self.ble.publish()
         emit_event({"type": "ble_advertising", "name": self.name})
         emit_event({"type": "ble_advertising_started"})
-        # Start heartbeat thread
+        
+        # Start heartbeat thread (v2: 2 Hz)
+        self._start_time = time.monotonic()
         self._hb_thread = threading.Thread(target=self._hb_loop, daemon=True)
         self._hb_thread.start()
-        # Install signal handlers for Ctrl+C/termination
+        
+        # Signal handlers
         def _handle_sig(_sig: int, _frm: Any) -> None:
             try:
                 self.ble.quit()
             except Exception:
                 pass
+        
         try:
             signal.signal(signal.SIGINT, _handle_sig)
             signal.signal(signal.SIGTERM, _handle_sig)
         except Exception:
             pass
-        # Start Ctrl+X watcher on stdin (if TTY)
+        
+        # Ctrl+X watcher
         def _watch_ctrl_x() -> None:
             if not sys.stdin or not sys.stdin.isatty():
                 return
@@ -252,8 +283,10 @@ class UbuntuPeripheral:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old)
                     except Exception:
                         pass
+        
         threading.Thread(target=_watch_ctrl_x, daemon=True).start()
-        # Block on main loop; Ctrl+C will exit
+        
+        # Block on main loop
         try:
             self.ble.run()
         except KeyboardInterrupt:
@@ -263,11 +296,11 @@ class UbuntuPeripheral:
 def run_ubuntu_peripheral(name: str, expected_code: str, callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> None:
     global _evt_cb
     _evt_cb = callback
-    # Ensure we connect to the real system bus (avoid conda/miniforge overrides)
+    
+    # Ensure we connect to the real system bus
     addr = os.environ.get('DBUS_SYSTEM_BUS_ADDRESS', '')
     if not addr or 'miniforge' in addr or 'conda' in addr:
         os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = 'unix:path=/var/run/dbus/system_bus_socket'
+    
     periph = UbuntuPeripheral(name, expected_code)
     periph.start()
-
-

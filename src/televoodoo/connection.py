@@ -11,6 +11,7 @@ import platform
 from typing import Any, Callable, Dict, Literal, Optional
 
 from .session import generate_credentials, print_session_qr
+from .wlan import DEFAULT_PORT as WLAN_DEFAULT_PORT
 
 
 ConnectionType = Literal["auto", "ble", "wlan"]
@@ -22,6 +23,7 @@ def start_televoodoo(
     name: Optional[str] = None,
     code: Optional[str] = None,
     connection: ConnectionType = "auto",
+    wlan_port: int = WLAN_DEFAULT_PORT,
 ) -> None:
     """Start Televoodoo and wait for phone app connection.
 
@@ -34,6 +36,7 @@ def start_televoodoo(
         name: Static peripheral/server name (default: random)
         code: Static auth code (default: random)
         connection: Connection type - "auto" (default), "ble", or "wlan"
+        wlan_port: UDP port for WLAN server (default: 50000)
 
     Raises:
         RuntimeError: If the requested connection type is not supported on this platform.
@@ -44,20 +47,26 @@ def start_televoodoo(
         name = name or gen_name
         code = code or gen_code
 
-    # Always print session/QR so clients can connect
-    print_session_qr(name, code)
-
     # Determine connection backend
-    if connection == "auto":
-        connection = _detect_best_connection()
+    resolved_connection = connection
+    if resolved_connection == "auto":
+        resolved_connection = _detect_best_connection()
+
+    # Print session/QR with transport info so phone app knows how to connect
+    print_session_qr(
+        name=name,
+        code=code,
+        transport=resolved_connection,
+        wlan_port=wlan_port if resolved_connection == "wlan" else None,
+    )
 
     try:
-        if connection == "ble":
+        if resolved_connection == "ble":
             _start_ble(name, code, callback, quiet)
-        elif connection == "wlan":
-            _start_wlan(name, code, callback, quiet)
+        elif resolved_connection == "wlan":
+            _start_wlan(name, code, callback, quiet, wlan_port)
         else:
-            raise RuntimeError(f"Unknown connection type: {connection}")
+            raise RuntimeError(f"Unknown connection type: {resolved_connection}")
     except Exception as e:
         print(
             json.dumps({"type": "error", "message": f"Connection failed: {e}"}),
@@ -66,7 +75,7 @@ def start_televoodoo(
         raise
 
 
-def _detect_best_connection() -> ConnectionType:
+def _detect_best_connection() -> Literal["ble", "wlan"]:
     """Detect the best available connection type for this platform.
 
     Currently defaults to BLE on supported platforms.
@@ -105,9 +114,9 @@ def _start_wlan(
     code: str,
     callback: Optional[Callable[[Dict[str, Any]], None]],
     quiet: bool,
+    port: int,
 ) -> None:
     """Start WLAN server backend."""
     from . import wlan
 
-    wlan.run_server(name, code, callback, quiet)
-
+    wlan.run_server(name, code, callback, quiet, port)

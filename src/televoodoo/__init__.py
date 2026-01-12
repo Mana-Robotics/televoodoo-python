@@ -5,6 +5,7 @@ Main exports:
 - PoseProvider: Get transformed poses from teleoperation events
 - Pose: Pose data structure
 - load_config: Load configuration from JSON file
+- protocol: Binary protocol parsing/packing (v2)
 """
 
 from .pose import Pose
@@ -13,6 +14,7 @@ from .pose_provider import PoseProvider
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
 from . import math
+from . import protocol
 
 __all__ = [
     # Main API
@@ -26,4 +28,6 @@ __all__ = [
     "print_session_qr",
     # Math utilities
     "math",
+    # Protocol (v2 binary)
+    "protocol",
 ]

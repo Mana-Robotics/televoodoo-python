@@ -11,6 +11,7 @@ license = "MIT"
 requires-python = ">=3.8"
 dependencies = [
   "qrcode",
+  "zeroconf",
   "pyobjc-core; sys_platform == 'darwin'",
   "pyobjc-framework-Cocoa; sys_platform == 'darwin'",
   "pyobjc-framework-CoreBluetooth; sys_platform == 'darwin'",
