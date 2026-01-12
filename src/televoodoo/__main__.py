@@ -2,7 +2,7 @@
 
 Usage:
     python -m televoodoo [--name NAME] [--code CODE] [--config CONFIG]
-    python -m televoodoo --transport wlan [--wlan-port 50000]
+    python -m televoodoo --transport wifi [--wifi-port 50000]
 """
 
 import argparse
@@ -35,16 +35,16 @@ def main() -> int:
         "--connection",
         "--transport",
         type=str,
-        choices=["auto", "ble", "wlan"],
+        choices=["auto", "ble", "wifi"],
         default="auto",
         dest="connection",
-        help="Connection type: 'auto' (default), 'ble', or 'wlan'",
+        help="Connection type: 'auto' (default), 'ble', or 'wifi'",
     )
     parser.add_argument(
-        "--wlan-port",
+        "--wifi-port",
         type=int,
         default=50000,
-        help="UDP port for WLAN server (default: 50000)",
+        help="UDP port for WIFI server (default: 50000)",
     )
     parser.add_argument(
         "--quiet",
@@ -103,7 +103,7 @@ def main() -> int:
             code=args.code,
             connection=args.connection,
             quiet=args.quiet,
-            wlan_port=args.wlan_port,
+            wifi_port=args.wifi_port,
         )
 
     return 0

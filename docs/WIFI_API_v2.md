@@ -1,4 +1,4 @@
-# WLAN Pose Streaming API (UDP + mDNS)
+# WIFI Pose Streaming API (UDP + mDNS)
 
 ## Overview
 
@@ -23,13 +23,13 @@ The iPhone app streams pose data **to** the Python server (iPhone → PC).
 ## CLI / Configuration
 
 ```bash
-televoodoo --transport wlan [--wlan-port 50000] [--service-name MyRobot]
+televoodoo --transport wifi [--wifi-port 50000] [--service-name MyRobot]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--transport` | `auto` | `ble` or `wlan` |
-| `--wlan-port` | `50000` | UDP port on PC |
+| `--transport` | `auto` | `ble` or `wifi` |
+| `--wifi-port` | `50000` | UDP port on PC |
 | `--service-name` | `Televoodoo` | mDNS service instance name |
 
 The existing `name` and `code` parameters from BLE are reused for identification and authentication.
@@ -222,7 +222,7 @@ Command types:
 
 ## Callback Event Format
 
-WLAN events use the same format as BLE for compatibility:
+WIFI events use the same format as BLE for compatibility:
 
 ```python
 # Pose event
@@ -242,8 +242,8 @@ WLAN events use the same format as BLE for compatibility:
 {"type": "command", "name": "recording", "value": True}
 
 # Connection events
-{"type": "wlan_connected", "client": "192.168.1.50:51234"}
-{"type": "wlan_disconnected", "reason": "timeout"}  # or "bye"
+{"type": "wifi_connected", "client": "192.168.1.50:51234"}
+{"type": "wifi_disconnected", "reason": "timeout"}  # or "bye"
 ```
 
 ---
@@ -288,7 +288,7 @@ sock.bind(("0.0.0.0", port))
 ## Startup Logging
 
 ```
-[televoodoo] WLAN server starting...
+[televoodoo] WIFI server starting...
 [televoodoo] Service: MyRobot @ macbook.local._televoodoo._udp.local.
 [televoodoo] UDP port: 50000
 [televoodoo] IP: 192.168.1.100

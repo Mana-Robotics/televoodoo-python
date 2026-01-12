@@ -1,8 +1,8 @@
-"""Televoodoo binary protocol - shared by BLE and WLAN transports.
+"""Televoodoo binary protocol - shared by BLE and WIFI transports.
 
 This module implements the v2 binary protocol as specified in:
 - BLE_PERIPHERAL_API_v2.md
-- WLAN_API_v2.md
+- WIFI_API_v2.md
 
 All messages use little-endian byte order.
 """
@@ -259,7 +259,7 @@ def pack_cmd(cmd_type: CmdType, value: int) -> bytes:
 
 
 def pose_to_event(pose: PoseMsg) -> Dict[str, Any]:
-    """Convert PoseMsg to callback event format (matches BLE/WLAN callback format)."""
+    """Convert PoseMsg to callback event format (matches BLE/WIFI callback format)."""
     return {
         "type": "pose",
         "data": {

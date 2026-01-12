@@ -14,12 +14,12 @@ parser.add_argument("--plot", action="store_true", help="Save Δt plot to exampl
 parser.add_argument(
     "--connection", "--transport",
     type=str,
-    choices=["auto", "ble", "wlan"],
+    choices=["auto", "ble", "wifi"],
     default="auto",
     dest="connection",
-    help="Connection type: 'auto' (default), 'ble', or 'wlan'",
+    help="Connection type: 'auto' (default), 'ble', or 'wifi'",
 )
-parser.add_argument("--wlan-port", type=int, default=50000, help="UDP port for WLAN")
+parser.add_argument("--wifi-port", type=int, default=50000, help="UDP port for WIFI")
 args = parser.parse_args()
 
 timestamps = []
@@ -56,7 +56,7 @@ def save_plot_and_exit(deltas_ms: list):
         # macOS BLE: stop the run loop gracefully
         CF.CFRunLoopStop(CF.CFRunLoopGetMain())
     else:
-        # WLAN or Linux: force exit since server blocks
+        # WIFI or Linux: force exit since server blocks
         os._exit(0)
 
 
@@ -79,4 +79,4 @@ def on_pose(evt):
         save_plot_and_exit(deltas_ms)
 
 
-start_televoodoo(callback=on_pose, quiet=True, connection=args.connection, wlan_port=args.wlan_port)
+start_televoodoo(callback=on_pose, quiet=True, connection=args.connection, wifi_port=args.wifi_port)

@@ -1,9 +1,9 @@
-"""WLAN connection backend for Televoodoo.
+"""WIFI connection backend for Televoodoo.
 
 This module provides a WiFi/UDP-based connection alternative to BLE.
 The phone app connects over the local network via mDNS discovery.
 
-Implements the WLAN_API_v2.md specification:
+Implements the WIFI_API_v2.md specification:
 - mDNS service advertisement (_televoodoo._udp.local.)
 - UDP binary protocol (same as BLE v2)
 - Single-client exclusive session
@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from . import protocol
 
-# Default UDP port for Televoodoo WLAN server
+# Default UDP port for Televoodoo WIFI server
 DEFAULT_PORT = 50000
 
 # Session timeout (bidirectional liveness detection)
@@ -179,7 +179,7 @@ class WlanServer:
                 # Different client - reject with BUSY
                 self._send_ack(addr, protocol.AckStatus.BUSY)
                 self._emit({
-                    "type": "wlan_rejected",
+                    "type": "wifi_rejected",
                     "client": f"{addr[0]}:{addr[1]}",
                     "reason": "busy",
                 })
@@ -189,7 +189,7 @@ class WlanServer:
         if hello.code != self.code:
             self._send_ack(addr, protocol.AckStatus.BAD_CODE)
             self._emit({
-                "type": "wlan_rejected",
+                "type": "wifi_rejected",
                 "client": f"{addr[0]}:{addr[1]}",
                 "reason": "bad_code",
             })
@@ -205,7 +205,7 @@ class WlanServer:
         
         self._send_ack(addr, protocol.AckStatus.OK)
         self._emit({
-            "type": "wlan_connected",
+            "type": "wifi_connected",
             "client": f"{addr[0]}:{addr[1]}",
         })
     
@@ -253,7 +253,7 @@ class WlanServer:
             client_str = f"{self.session.client_addr[0]}:{self.session.client_addr[1]}"
             self.session = None
             self._emit({
-                "type": "wlan_disconnected",
+                "type": "wifi_disconnected",
                 "reason": "bye",
                 "client": client_str,
             })
@@ -276,7 +276,7 @@ class WlanServer:
                     client_str = f"{self.session.client_addr[0]}:{self.session.client_addr[1]}"
                     self.session = None
                     self._emit({
-                        "type": "wlan_disconnected",
+                        "type": "wifi_disconnected",
                         "reason": "timeout",
                         "client": client_str,
                     })
@@ -316,9 +316,9 @@ class WlanServer:
                     self._emit({"type": "error", "message": f"recv error: {e}"})
     
     def start(self) -> None:
-        """Start the WLAN server."""
+        """Start the WIFI server."""
         self._emit({
-            "type": "wlan_starting",
+            "type": "wifi_starting",
             "name": self.name,
             "port": self.port,
             "ip": self.local_ip,
@@ -339,7 +339,7 @@ class WlanServer:
         self._timeout_thread.start()
         
         self._emit({
-            "type": "wlan_listening",
+            "type": "wifi_listening",
             "ip": self.local_ip,
             "port": self.port,
             "code": self.code,
@@ -352,7 +352,7 @@ class WlanServer:
             self.stop()
     
     def stop(self) -> None:
-        """Stop the WLAN server."""
+        """Stop the WIFI server."""
         self.running = False
         
         # Close session if active
@@ -360,7 +360,7 @@ class WlanServer:
             client_str = f"{self.session.client_addr[0]}:{self.session.client_addr[1]}"
             self.session = None
             self._emit({
-                "type": "wlan_disconnected",
+                "type": "wifi_disconnected",
                 "reason": "server_shutdown",
                 "client": client_str,
             })
@@ -376,7 +376,7 @@ class WlanServer:
                 pass
             self.sock = None
         
-        self._emit({"type": "wlan_stopped"})
+        self._emit({"type": "wifi_stopped"})
 
 
 def run_server(
@@ -386,7 +386,7 @@ def run_server(
     quiet: bool = False,
     port: int = DEFAULT_PORT,
 ) -> None:
-    """Run the Televoodoo WLAN server.
+    """Run the Televoodoo WIFI server.
 
     This starts a UDP server that the phone app can connect to
     over the local network. The phone and computer must be on the same
@@ -402,8 +402,8 @@ def run_server(
     Event format (same as BLE for compatibility):
     - {"type": "pose", "data": {"absolute_input": {...}}}
     - {"type": "command", "name": "...", "value": ...}
-    - {"type": "wlan_connected", "client": "192.168.1.50:51234"}
-    - {"type": "wlan_disconnected", "reason": "timeout"|"bye"|"server_shutdown"}
+    - {"type": "wifi_connected", "client": "192.168.1.50:51234"}
+    - {"type": "wifi_disconnected", "reason": "timeout"|"bye"|"server_shutdown"}
     """
     server = WlanServer(
         name=name,
@@ -425,7 +425,7 @@ def run_server(
 
 
 def get_server_url(port: int = DEFAULT_PORT) -> str:
-    """Get the UDP endpoint info for the WLAN server.
+    """Get the UDP endpoint info for the WIFI server.
 
     Args:
         port: Server port (default: 50000)

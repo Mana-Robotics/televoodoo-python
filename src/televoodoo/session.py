@@ -6,7 +6,7 @@ import socket
 import string
 from typing import Literal, Optional, Tuple
 
-TransportType = Literal["ble", "wlan"]
+TransportType = Literal["ble", "wifi"]
 
 
 def generate_credentials() -> Tuple[str, str]:
@@ -40,17 +40,17 @@ def print_session_qr(
     name: str,
     code: str,
     transport: TransportType = "ble",
-    wlan_port: Optional[int] = None,
-    wlan_ip: Optional[str] = None,
+    wifi_port: Optional[int] = None,
+    wifi_ip: Optional[str] = None,
 ) -> None:
     """Print session info as JSON and display QR code for phone app.
 
     Args:
         name: Peripheral/server name
         code: Authentication code
-        transport: Connection type ("ble" or "wlan")
-        wlan_port: UDP port for WLAN (required if transport="wlan")
-        wlan_ip: IP address for WLAN (auto-detected if not provided)
+        transport: Connection type ("ble" or "wifi")
+        wifi_port: UDP port for WIFI (required if transport="wifi")
+        wifi_ip: IP address for WIFI (auto-detected if not provided)
     """
     # Build session info
     session_info = {
@@ -60,10 +60,10 @@ def print_session_qr(
         "transport": transport,
     }
     
-    # Add WLAN-specific fields
-    if transport == "wlan":
-        session_info["ip"] = wlan_ip or _get_local_ip()
-        session_info["port"] = wlan_port or 50000
+    # Add WIFI-specific fields
+    if transport == "wifi":
+        session_info["ip"] = wifi_ip or _get_local_ip()
+        session_info["port"] = wifi_port or 50000
     
     print(json.dumps(session_info), flush=True)
     
@@ -73,7 +73,7 @@ def print_session_qr(
         # QR code payload includes transport info
         payload_data = {"name": name, "code": code, "transport": transport}
         
-        if transport == "wlan":
+        if transport == "wifi":
             payload_data["ip"] = session_info["ip"]
             payload_data["port"] = session_info["port"]
         

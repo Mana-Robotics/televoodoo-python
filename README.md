@@ -6,8 +6,8 @@
 
 ### The Televoodoo Ecosystem
 
-- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Create BLE services for the Televoodoo App to connect to, with pose handling, coordinate transforms, and more
-- **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via BLE
+- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Receive 6DoF poses from the Televoodoo App via WiFi or BLE, with pose handling, coordinate transforms, and more
+- **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via WiFi or BLE
 - **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
 
@@ -16,10 +16,12 @@
 
 ### Platform Notes
 
-| Platform | Requirements |
-|----------|-------------|
-| **macOS** | PyObjC frameworks (auto-installed via requirements.txt) |
-| **Ubuntu** | BlueZ + system headers: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
+| Platform | WiFi (default) | BLE (optional) |
+|----------|----------------|----------------|
+| **macOS** | ✅ Works out of box | PyObjC frameworks (auto-installed) |
+| **Ubuntu** | ✅ Works out of box | BlueZ: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
+| **Windows** | ✅ Works out of box | Not supported |
+| **Other** | ✅ Works out of box | Not supported |
 
 
 ### 1. Install
@@ -244,12 +246,20 @@ You can specify the connection backend:
 ```python
 start_televoodoo(
     callback=handle_pose,
-    connection="auto"  # Options: "auto" (default), "ble"
+    connection="auto"  # Options: "auto" (default), "wifi", "ble"
 )
 ```
 
-- **`"auto"`** (default): Automatically detects the best available connection type (currently defaults to BLE)
-- **`"ble"`**: Force Bluetooth Low Energy connection
+- **`"auto"`** (default): Uses WiFi — recommended for best latency and cross-platform compatibility
+- **`"wifi"`**: UDP-based connection over local network (~60Hz consistent frequency / ~16ms latency)
+- **`"ble"`**: Bluetooth Low Energy connection (platform-specific, subject to connection interval batching (e.g. iOS), resulting in effectively only ~30 Hz of update frequency / 32ms latency)
+
+Or via CLI:
+
+```bash
+televoodoo --connection wifi   # WiFi (default)
+televoodoo --connection ble    # Bluetooth
+```
 
 ## Config Files
 
@@ -375,7 +385,8 @@ For in-depth technical details, see `docs/`:
 
 - **[Pose Data Format](docs/POSE_DATA_FORMAT.md)** — Coordinate systems, field descriptions, validation
 - **[Connection Setup](docs/CONNECTION_SETUP.md)** — QR codes, credentials, multi-device setup
-- **[BLE Peripheral API](docs/BLE_PERIPHERAL_API.md)** — Service UUIDs, characteristics, protocol details
+- **[WiFi API](docs/WIFI_API_v2.md)** — UDP protocol, mDNS discovery (default connection)
+- **[BLE Peripheral API](docs/BLE_PERIPHERAL_API_v2.md)** — Service UUIDs, characteristics, protocol details
 
 
 ## Contributing

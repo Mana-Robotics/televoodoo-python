@@ -2,17 +2,17 @@
 
 ## Overview
 
-Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This v2 spec uses **binary data format** for pose and command data, matching the WLAN protocol for code reuse.
+Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This v2 spec uses **binary data format** for pose and command data, matching the WIFI protocol for code reuse.
 
 ## Changes from v1
 
 | Change | v1 | v2 |
 |--------|----|----|
-| Pose data format | JSON string | Binary (same as WLAN POSE) |
-| Command data format | JSON string | Binary (same as WLAN CMD) |
+| Pose data format | JSON string | Binary (same as WIFI POSE) |
+| Command data format | JSON string | Binary (same as WIFI CMD) |
 | Heartbeat | UInt32 counter | Binary with timestamp |
 
-**Benefit**: Same parsing code works for both BLE and WLAN transports.
+**Benefit**: Same parsing code works for both BLE and WIFI transports.
 
 ---
 
@@ -34,7 +34,7 @@ Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. 
 
 ---
 
-## Binary Protocol (Shared with WLAN)
+## Binary Protocol (Shared with WIFI)
 
 All binary messages use **little-endian** byte order.
 
@@ -111,7 +111,7 @@ Unchanged from v1. Simple string auth is sufficient for BLE since connection is 
 POSE_FORMAT = "<4sBBHQBB7f"  # little-endian, 46 bytes
 ```
 
-**Note**: This is identical to WLAN POSE format. Same parsing code works for both.
+**Note**: This is identical to WIFI POSE format. Same parsing code works for both.
 
 ### 3. Heartbeat Characteristic
 
@@ -158,7 +158,7 @@ POSE_FORMAT = "<4sBBHQBB7f"  # little-endian, 46 bytes
 | 1 | RECORDING | `1`=start, `0`=stop |
 | 2 | KEEP_RECORDING | `1`=keep, `0`=discard |
 
-**Note**: This is identical to WLAN CMD format. Same parsing code works for both.
+**Note**: This is identical to WIFI CMD format. Same parsing code works for both.
 
 ---
 
@@ -179,7 +179,7 @@ The 3-second heartbeat timeout catches cases where:
 
 ## Callback Event Format
 
-Same format as WLAN for compatibility:
+Same format as WIFI for compatibility:
 
 ```python
 # Pose event
@@ -207,7 +207,7 @@ Same format as WLAN for compatibility:
 
 ## Shared Parsing Code
 
-Both BLE and WLAN can use the same binary parsing:
+Both BLE and WIFI can use the same binary parsing:
 
 ```python
 import struct
