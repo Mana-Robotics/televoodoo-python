@@ -9,11 +9,13 @@ from typing import Any, Dict, Optional, Tuple
 class Pose:
     """6DoF pose with position and orientation.
 
+    The binary protocol sends: movement_start, x, y, z, qx, qy, qz, qw.
+    Euler angles are NOT in the protocol — use PoseProvider to compute them.
+
     Attributes:
         movement_start: True when this pose marks the start of a new movement
                        (origin for delta calculations should be reset).
         x, y, z: Position in meters.
-        x_rot, y_rot, z_rot: Euler angles (convenience, may not always be set).
         qx, qy, qz, qw: Quaternion orientation (scalar-last convention).
     """
 
@@ -21,9 +23,6 @@ class Pose:
     x: float
     y: float
     z: float
-    x_rot: float
-    y_rot: float
-    z_rot: float
     qx: float
     qy: float
     qz: float
@@ -31,7 +30,7 @@ class Pose:
 
     @classmethod
     def from_dict(cls, d: Dict[str, Any]) -> "Pose":
-        """Create a Pose from a dictionary (e.g., from JSON or BLE event data).
+        """Create a Pose from a dictionary (e.g., from protocol event data).
 
         Missing fields default to 0.0, except qw which defaults to 1.0 (identity).
         """
@@ -40,9 +39,6 @@ class Pose:
             x=float(d.get("x", 0.0)),
             y=float(d.get("y", 0.0)),
             z=float(d.get("z", 0.0)),
-            x_rot=float(d.get("x_rot", 0.0)),
-            y_rot=float(d.get("y_rot", 0.0)),
-            z_rot=float(d.get("z_rot", 0.0)),
             qx=float(d.get("qx", 0.0)),
             qy=float(d.get("qy", 0.0)),
             qz=float(d.get("qz", 0.0)),
@@ -89,9 +85,6 @@ class Pose:
             "x": self.x,
             "y": self.y,
             "z": self.z,
-            "x_rot": self.x_rot,
-            "y_rot": self.y_rot,
-            "z_rot": self.z_rot,
             "qx": self.qx,
             "qy": self.qy,
             "qz": self.qz,

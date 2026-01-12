@@ -2,7 +2,7 @@
 
 ## Overview
 
-Televoodoo Python receives 6DoF pose tracking data from the Televoodoo App via Bluetooth Low Energy (BLE). This document describes the pose data format your callback function will receive, coordinate systems, and how to work with the data in your applications.
+Televoodoo Python receives 6DoF pose tracking data from the Televoodoo App via WiFi (UDP) or Bluetooth Low Energy (BLE). This document describes the pose data format your callback function will receive, coordinate systems, and how to work with the data in your applications.
 
 ## Coordinate System
 
@@ -23,23 +23,25 @@ Televoodoo Python receives 6DoF pose tracking data from the Televoodoo App via B
 
 > **Note**: The specific orientation depends on how the ArUco marker is positioned. Use the Televoodoo Viewer app to visually verify and configure your coordinate system.
 
-## JSON Payload Format
+## Binary Protocol Format
 
-Your callback function receives pose data as a Python dictionary with the following structure:
+The Televoodoo App sends pose data using a binary protocol (see `WIFI_API.md` and `BLE_API.md` for details). The raw pose event contains:
 
 ```python
 {
-  "movement_start": True,  # or False
-  "x": 0.0,
-  "y": 0.0,
-  "z": 0.0,
-  "x_rot": 0.0,
-  "y_rot": 0.0,
-  "z_rot": 0.0,
-  "qx": 0.0,
-  "qy": 0.0,
-  "qz": 0.0,
-  "qw": 1.0
+  "type": "pose",
+  "data": {
+    "absolute_input": {
+      "movement_start": True,  # or False
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "qx": 0.0,
+      "qy": 0.0,
+      "qz": 0.0,
+      "qw": 1.0
+    }
+  }
 }
 ```
 
@@ -57,20 +59,13 @@ Your callback function receives pose data as a Python dictionary with the follow
 - **y** (float): Position along Y-axis in meters
 - **z** (float): Position along Z-axis in meters
 
-### Rotation (Euler Angles)
-- **x_rot** (float): Rotation around X-axis in degrees (pitch)
-- **y_rot** (float): Rotation around Y-axis in degrees (yaw)
-- **z_rot** (float): Rotation around Z-axis in degrees (roll)
-
-> **Note**: Euler angles are provided for convenience but may suffer from gimbal lock. For robust 3D calculations, use the quaternion representation.
-
 ### Rotation (Quaternion)
 - **qx** (float): Quaternion X component
 - **qy** (float): Quaternion Y component
 - **qz** (float): Quaternion Z component
 - **qw** (float): Quaternion W component
 
-> **Note**: Quaternions are the preferred representation for 3D rotations as they avoid gimbal lock and interpolate smoothly.
+> **Note**: Quaternions are the preferred representation for 3D rotations as they avoid gimbal lock and interpolate smoothly. Euler angles are NOT sent in the protocol — use `PoseProvider` if you need them computed from the quaternion.
 
 ## Example Payloads
 
@@ -82,9 +77,6 @@ Your callback function receives pose data as a Python dictionary with the follow
   "x": 0.15,
   "y": 0.20,
   "z": -0.10,
-  "x_rot": 15.0,
-  "y_rot": -30.0,
-  "z_rot": 5.0,
   "qx": 0.01234,
   "qy": -0.56789,
   "qz": 0.12345,
@@ -100,9 +92,6 @@ Your callback function receives pose data as a Python dictionary with the follow
   "x": 0.18,                # Moved 3cm from origin
   "y": 0.22,
   "z": -0.08,
-  "x_rot": 18.0,
-  "y_rot": -28.0,
-  "z_rot": 6.0,
   "qx": 0.02345,
   "qy": -0.55678,
   "qz": 0.13456,

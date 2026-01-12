@@ -22,10 +22,10 @@
   },
   "targetFrameDegrees": {
     "x": 0,
-    "y": 180,
+    "y": 0,
     "z": 0,
     "x_rot_deg": 0,
-    "y_rot_deg": 0,
+    "y_rot_deg": 180,
     "z_rot_deg": 0
   }
 }

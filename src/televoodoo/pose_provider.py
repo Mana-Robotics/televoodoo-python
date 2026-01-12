@@ -274,11 +274,16 @@ class PoseProvider:
             "qw": pose.qw,
         }
 
-        if self.config.includeOrientation.get("euler_radian") or self.config.includeOrientation.get("euler_degree"):
+        # Compute Euler angles from quaternion if requested
+        if self.config.includeOrientation.get("euler_radian"):
+            xr, yr, zr = self._quat_to_euler_xyz((pose.qx, pose.qy, pose.qz, pose.qw))
+            absolute_input.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+        if self.config.includeOrientation.get("euler_degree"):
+            xr, yr, zr = self._quat_to_euler_xyz((pose.qx, pose.qy, pose.qz, pose.qw))
             absolute_input.update({
-                "x_rot": pose.x_rot,
-                "y_rot": pose.y_rot,
-                "z_rot": pose.z_rot,
+                "x_rot_deg": (xr * 180.0 / math.pi),
+                "y_rot_deg": (yr * 180.0 / math.pi),
+                "z_rot_deg": (zr * 180.0 / math.pi),
             })
 
         delta_input = None

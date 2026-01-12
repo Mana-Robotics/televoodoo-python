@@ -181,21 +181,21 @@ start_televoodoo(callback=my_handler)
 
 ### Pose Format
 
-The `Pose` object contains:
+`PoseProvider.get_absolute()` returns a transformed pose:
 
 ```python
 {
     "movement_start": True,  # New movement origin (for delta calculation)
-    "x": 0.15,               # Position in meters
+    "x": 0.15,               # Position in meters (transformed)
     "y": 0.20,
     "z": -0.10,
-    "x_rot": 15.0,           # Euler angles in degrees
-    "y_rot": -30.0,
-    "z_rot": 5.0,
     "qx": 0.01234,           # Quaternion (preferred for 3D math)
     "qy": -0.56789,
     "qz": 0.12345,
-    "qw": 0.81234
+    "qw": 0.81234,
+    "rx": 0.26,              # Rotation vector (radians) — always included
+    "ry": -0.52,
+    "rz": 0.09
 }
 ```
 
@@ -203,8 +203,8 @@ The `Pose` object contains:
 |-------|------|-------------|
 | `movement_start` | bool | `True` = new origin for delta calculation (see below) |
 | `x`, `y`, `z` | float | Position relative to ArUco marker (meters) |
-| `x_rot`, `y_rot`, `z_rot` | float | Euler angles (degrees) — convenience only |
 | `qx`, `qy`, `qz`, `qw` | float | Quaternion — use this for robust 3D calculations |
+| `rx`, `ry`, `rz` | float | Rotation vector (radians) — axis-angle representation |
 
 > **Understanding `movement_start`**: When `true`, this pose becomes the new origin for calculating deltas. This allows you to reposition the phone/controller while not actively controlling, then start a new movement from a different physical position — the robot end effector stays in place and only applies relative deltas from the new origin.
 
@@ -337,17 +337,8 @@ config = load_config("my_robot_config.json")
 pose_provider = PoseProvider(config)
 
 def on_teleop_event(evt):
-    # For robot teleoperation: use get_delta()
-    delta = pose_provider.get_delta(evt)
-    if delta is not None:
-        print(f"Delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
-        print(f"Rotation: rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
-        return
-    
-    # For absolute poses: use get_absolute()
-    pose = pose_provider.get_absolute(evt)
-    if pose is not None:
-        print(f"Position: x={pose['x']:.3f} y={pose['y']:.3f} z={pose['z']:.3f}")
+    # project specific callback code 
+    # ...
 
 # Use credentials from config (if specified), or fall back to random
 start_televoodoo(
