@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import json
 import platform
-from typing import Any, Callable, Dict, Literal, Optional
+from typing import Any, Callable, Dict, Literal, Optional, TYPE_CHECKING
 
 from .session import generate_credentials, print_session_qr
 from .wifi import DEFAULT_PORT as WIFI_DEFAULT_PORT
+
+if TYPE_CHECKING:
+    from .config import OutputConfig
 
 
 ConnectionType = Literal["auto", "ble", "wifi"]
@@ -24,6 +27,10 @@ def start_televoodoo(
     code: Optional[str] = None,
     connection: ConnectionType = "auto",
     wifi_port: int = WIFI_DEFAULT_PORT,
+    upsample_to_hz: Optional[float] = None,
+    rate_limit_hz: Optional[float] = None,
+    regulated: Optional[bool] = None,
+    config: Optional["OutputConfig"] = None,
 ) -> None:
     """Start Televoodoo and wait for phone app connection.
 
@@ -37,6 +44,15 @@ def start_televoodoo(
         code: Static auth code (default: random)
         connection: Connection type - "auto" (default), "ble", or "wifi"
         wifi_port: UDP port for WIFI server (default: 50000)
+        upsample_to_hz: Upsample poses to target frequency using linear extrapolation.
+            Useful for robot controllers requiring higher frequency input (100-200 Hz).
+        rate_limit_hz: Limit output to maximum frequency (drops excess poses).
+        regulated: Controls timing when upsampling. Default (None) enables regulated
+            mode when upsampling for consistent timing (~5ms max latency). Set to
+            False for zero latency with irregular timing.
+        config: Optional OutputConfig. If provided and upsample_to_hz/rate_limit_hz
+            are not set, values will be read from config.upsample_to_frequency_hz
+            and config.rate_limit_frequency_hz.
 
     Raises:
         RuntimeError: If the requested connection type is not supported on this platform.
@@ -60,11 +76,53 @@ def start_televoodoo(
         wifi_port=wifi_port if resolved_connection == "wifi" else None,
     )
 
+    # Resolve resampling settings from config if not provided directly
+    effective_upsample_hz = upsample_to_hz
+    effective_rate_limit_hz = rate_limit_hz
+    
+    if config is not None:
+        if effective_upsample_hz is None:
+            effective_upsample_hz = getattr(config, 'upsample_to_frequency_hz', None)
+        if effective_rate_limit_hz is None:
+            effective_rate_limit_hz = getattr(config, 'rate_limit_frequency_hz', None)
+
+    # Set up resampling if enabled
+    effective_callback = callback
+    resampler = None
+    
+    if effective_upsample_hz is not None or effective_rate_limit_hz is not None:
+        from .resampler import PoseResampler
+        
+        # Default to regulated=True when upsampling (consistent timing, ~5ms max latency)
+        effective_regulated = regulated if regulated is not None else (effective_upsample_hz is not None)
+        
+        resampler = PoseResampler(
+            upsample_to_hz=effective_upsample_hz,
+            rate_limit_hz=effective_rate_limit_hz,
+            regulated=effective_regulated,
+        )
+        
+        if callback is not None:
+            resampler.start(callback=callback)
+        
+        def feed_resampler(evt: Dict[str, Any]) -> None:
+            resampler.feed(evt)
+        
+        effective_callback = feed_resampler
+        
+        if effective_upsample_hz:
+            print(json.dumps({
+                "type": "resampling_enabled",
+                "upsample_to_hz": effective_upsample_hz,
+                "rate_limit_hz": effective_rate_limit_hz,
+                "regulated": effective_regulated,
+            }), flush=True)
+
     try:
         if resolved_connection == "ble":
-            _start_ble(name, code, callback, quiet)
+            _start_ble(name, code, effective_callback, quiet)
         elif resolved_connection == "wifi":
-            _start_wifi(name, code, callback, quiet, wifi_port)
+            _start_wifi(name, code, effective_callback, quiet, wifi_port)
         else:
             raise RuntimeError(f"Unknown connection type: {resolved_connection}")
     except Exception as e:
@@ -73,6 +131,10 @@ def start_televoodoo(
             flush=True,
         )
         raise
+    finally:
+        # Clean up resampler if it was created
+        if resampler is not None:
+            resampler.stop()
 
 
 def _detect_best_connection() -> Literal["ble", "wifi"]:

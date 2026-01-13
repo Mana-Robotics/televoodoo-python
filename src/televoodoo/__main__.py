@@ -57,6 +57,24 @@ def main() -> int:
         action="store_true",
         help="Run pose simulation instead of waiting for phone connection",
     )
+    parser.add_argument(
+        "--upsample-hz",
+        type=float,
+        default=None,
+        help="Upsample poses to target frequency (Hz) using linear extrapolation",
+    )
+    parser.add_argument(
+        "--rate-limit-hz",
+        type=float,
+        default=None,
+        help="Rate limit pose output to maximum frequency (Hz)",
+    )
+    parser.add_argument(
+        "--no-regulated",
+        action="store_true",
+        dest="no_regulated",
+        help="Disable fixed-interval timing (zero latency but irregular timing)",
+    )
     args = parser.parse_args()
 
     config = OutputConfig(
@@ -98,12 +116,20 @@ def main() -> int:
         run_simulation(on_pose)
     else:
         # Start Televoodoo and wait for phone connection
+        # Resampling is handled internally when upsample_to_hz or rate_limit_hz is set
+        # regulated=None uses default (True when upsampling), False disables it
+        regulated = False if args.no_regulated else None
+        
         start_televoodoo(
+            callback=on_pose,
             name=args.name,
             code=args.code,
             connection=args.connection,
             quiet=args.quiet,
             wifi_port=args.wifi_port,
+            upsample_to_hz=args.upsample_hz,
+            rate_limit_hz=args.rate_limit_hz,
+            regulated=regulated,
         )
 
     return 0

@@ -113,6 +113,7 @@ Complete examples can be found in `examples/`:
 | `measure_frequency/` | Measure pose input frequency |
 | `record_poses/` | Record poses to a JSON file |
 | `haptic_feedback/` | Send haptic feedback with simulated sensor values |
+| `upsampled_control/` | High-frequency robot control with upsampled poses (200 Hz) |
 
 
 
@@ -361,6 +362,55 @@ start_televoodoo(
 
 
 ## Advanced Topics
+
+### Upsampling & Rate Limiting
+
+Robot arm controllers often require higher frequency input (100-200 Hz) than the phone can provide (30-60 Hz via WiFi, ~30 Hz via BLE). Televoodoo can upsample pose data using linear extrapolation.
+
+**Via CLI:**
+```bash
+televoodoo --upsample-hz 200          # Upsample to 200 Hz
+televoodoo --rate-limit-hz 30         # Cap output at 30 Hz (no upsampling)
+```
+
+**Via Python:**
+```python
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+config = load_config("my_robot_config.json")
+pose_provider = PoseProvider(config)
+
+def robot_handler(evt):
+    """Called at ~200 Hz with real or extrapolated poses."""
+    delta = pose_provider.get_delta(evt)
+    if delta:
+        robot.send_delta(delta['dx'], delta['dy'], delta['dz'])
+
+# Just pass upsample_to_hz - resampling is handled internally
+start_televoodoo(callback=robot_handler, upsample_to_hz=200.0, quiet=True)
+```
+
+**Via Config File:**
+```json
+{
+  "upsample_to_frequency_hz": 200.0
+}
+```
+
+Then load and pass the config:
+```python
+config = load_config("my_robot_config.json")
+start_televoodoo(callback=handler, config=config)
+```
+
+**Key behaviors:**
+- Real poses forwarded immediately (zero added latency)
+- Extrapolated poses fill gaps using velocity-based prediction
+- **Safety**: Extrapolation stops if no new pose arrives within expected interval (prevents runaway motion if phone disconnects)
+
+> 💡 **Note:** Upsampling uses **regulated mode by default** for consistent timing at the target frequency. This outputs at fixed intervals with ~5ms max latency — ideal for robot controllers. Use `--no-regulated` if you prefer zero latency with irregular timing.
+
+See `examples/upsampled_control/` for a complete example.
 
 ### Haptic Feedback
 

@@ -1,0 +1,62 @@
+"""Rate-limited pose output example.
+
+This example demonstrates using rate limiting to cap the frequency of pose
+data from the phone. Useful when your downstream consumer (robot, simulation)
+can only handle a limited update rate.
+
+Key features:
+- Caps output to a maximum frequency (e.g., 30 Hz)
+- Drops excess poses while keeping the latest
+- No added latency - poses are forwarded immediately when allowed
+"""
+
+import argparse
+from televoodoo import start_televoodoo, PoseProvider, load_config
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--hz", type=float, default=30.0, help="Maximum frequency in Hz")
+parser.add_argument("--config", type=str, default=None, help="Config file path")
+parser.add_argument(
+    "--connection",
+    type=str,
+    choices=["auto", "ble", "wifi"],
+    default="auto",
+    help="Connection type: 'auto' (default), 'ble', or 'wifi'",
+)
+args = parser.parse_args()
+
+# Load config (optional)
+config = load_config(args.config)
+pose_provider = PoseProvider(config)
+
+# Counter for statistics
+pose_count = 0
+
+
+def on_pose(evt):
+    """Called at rate-limited frequency with real poses."""
+    global pose_count
+
+    pose = pose_provider.get_absolute(evt)
+    if pose is None:
+        return
+
+    pose_count += 1
+
+    # Print every pose with counter
+    print(
+        f"[{pose_count:4d}] "
+        f"x={pose['x']:+.3f} y={pose['y']:+.3f} z={pose['z']:+.3f}"
+    )
+
+
+print(f"Starting with {args.hz} Hz rate limit via {args.connection}...")
+print("Excess poses will be dropped to maintain this rate.")
+print("Ctrl+C to exit.\n")
+
+start_televoodoo(
+    callback=on_pose,
+    connection=args.connection,
+    rate_limit_hz=args.hz,
+    quiet=True,
+)

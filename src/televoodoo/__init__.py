@@ -12,6 +12,7 @@ Main exports:
 from .pose import Pose
 from .config import OutputConfig, load_config
 from .pose_provider import PoseProvider
+from .resampler import PoseResampler
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
 from .wifi import send_haptic
@@ -23,6 +24,7 @@ __all__ = [
     "start_televoodoo",
     "send_haptic",
     "PoseProvider",
+    "PoseResampler",
     "Pose",
     "OutputConfig",
     "load_config",

@@ -20,6 +20,8 @@ class OutputConfig:
         targetFrame: Pose of target coordinate system relative to reference/world (Euler radians)
         auth_name: Optional static peripheral name (overrides random generation)
         auth_code: Optional static authentication code (overrides random generation)
+        upsample_to_frequency_hz: Target frequency for upsampling via linear extrapolation
+        rate_limit_frequency_hz: Maximum output frequency (drops excess poses)
     """
     includeFormats: Dict[str, bool]
     includeOrientation: Dict[str, bool]
@@ -30,6 +32,9 @@ class OutputConfig:
     # Authentication credentials (optional, can be set in config file)
     auth_name: Optional[str] = None
     auth_code: Optional[str] = None
+    # Resampling settings
+    upsample_to_frequency_hz: Optional[float] = None
+    rate_limit_frequency_hz: Optional[float] = None
 
 
 def load_config(path: Optional[str] = None) -> OutputConfig:
@@ -106,6 +111,14 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
     auth_name = auth.get("name") if isinstance(auth, dict) else None
     auth_code = auth.get("code") if isinstance(auth, dict) else None
 
+    # Parse resampling settings
+    upsample_hz = data.get("upsample_to_frequency_hz")
+    rate_limit_hz = data.get("rate_limit_frequency_hz")
+    
+    # Convert to float if provided, otherwise None
+    upsample_to_frequency_hz = float(upsample_hz) if upsample_hz is not None else None
+    rate_limit_frequency_hz = float(rate_limit_hz) if rate_limit_hz is not None else None
+
     return OutputConfig(
         includeFormats=data.get(
             "includeFormats",
@@ -125,5 +138,7 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
         targetFrame=targetFrame,
         auth_name=auth_name,
         auth_code=auth_code,
+        upsample_to_frequency_hz=upsample_to_frequency_hz,
+        rate_limit_frequency_hz=rate_limit_frequency_hz,
     )
 
