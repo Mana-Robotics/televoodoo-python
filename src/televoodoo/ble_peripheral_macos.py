@@ -33,6 +33,7 @@ CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
 CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
+CHAR_HAPTIC_UUID = "1C8FD138-FC18-4846-954D-E509366AEF67"
 
 # Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
@@ -51,12 +52,15 @@ class PeripheralDelegate(NSObject):
         self._start_time = time.monotonic()
         self._hb_thread = None
         self._hb_char = None
+        self._haptic_char = None
         self._cb = None
+        self._haptic_sender_cb = None
         return self
 
-    def setup_(self, code, cb=None):
+    def setup_(self, code, cb=None, haptic_sender_cb=None):
         self.auth_code = code
         self._cb = cb
+        self._haptic_sender_cb = haptic_sender_cb
         self.pm = CBPeripheralManager.alloc().initWithDelegate_queue_options_(self, None, None)
         return self
 
@@ -127,10 +131,19 @@ class PeripheralDelegate(NSObject):
             CBAttributePermissionsWriteable,
         )
 
+        # Haptic (Read + Notify)
+        haptic_char = CBMutableCharacteristic.alloc().initWithType_properties_value_permissions_(
+            CBUUID.UUIDWithString_(CHAR_HAPTIC_UUID),
+            CBCharacteristicPropertyRead | CBCharacteristicPropertyNotify,
+            None,
+            CBAttributePermissionsReadable,
+        )
+        self._haptic_char = haptic_char
+
         service = CBMutableService.alloc().initWithType_primary_(
             CBUUID.UUIDWithString_(SERVICE_UUID), True
         )
-        service.setCharacteristics_([ctrl_char, auth_char, pose_char, heartbeat_char, cmd_char])
+        service.setCharacteristics_([ctrl_char, auth_char, pose_char, heartbeat_char, cmd_char, haptic_char])
         self.pm.addService_(service)
 
         # Start advertising
@@ -144,6 +157,22 @@ class PeripheralDelegate(NSObject):
         self._start_time = time.monotonic()
         self._hb_thread = threading.Thread(target=self._hb_loop, daemon=True)
         self._hb_thread.start()
+
+        # Register haptic sender with outer layer
+        if self._haptic_sender_cb and self._haptic_char is not None:
+            def _send_haptic(intensity: float) -> bool:
+                try:
+                    b = protocol.pack_haptic(intensity)
+                    val = NSData.dataWithBytes_length_(b, len(b))
+                    self.pm.updateValue_forCharacteristic_onSubscribedCentrals_(val, self._haptic_char, None)
+                    return True
+                except Exception:
+                    return False
+
+            try:
+                self._haptic_sender_cb(_send_haptic)
+            except Exception:
+                pass
 
     def _hb_loop(self):
         """Heartbeat loop - 2 Hz with binary format."""
@@ -249,10 +278,10 @@ class PeripheralDelegate(NSObject):
             peripheral.respondToRequest_withResult_(request, CBATTErrorSuccess)
 
 
-def run_macos_peripheral(name: str, expected_code: str, callback=None):
+def run_macos_peripheral(name: str, expected_code: str, callback=None, haptic_sender_cb=None):
     import signal
     
-    delegate = PeripheralDelegate.alloc().init().setup_(expected_code, callback)
+    delegate = PeripheralDelegate.alloc().init().setup_(expected_code, callback, haptic_sender_cb)
     delegate.local_name = name
     
     def handle_sigterm(signum, frame):

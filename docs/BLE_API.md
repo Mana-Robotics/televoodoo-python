@@ -21,6 +21,7 @@ Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. 
 | 2 | Pose Data | `...AEF64` | Write, WriteWithoutResponse | Binary |
 | 3 | Heartbeat | `...AEF65` | Read, Notify | Binary |
 | 4 | Command Data | `...AEF66` | Write, WriteWithoutResponse | Binary |
+| 5 | Haptic Data | `...AEF67` | Read, Notify | Binary |
 
 ---
 
@@ -43,6 +44,7 @@ All binary messages use **little-endian** byte order.
 | 3 | POSE | iPhone → PC | Pose Data |
 | 5 | CMD | iPhone → PC | Command Data |
 | 6 | HEARTBEAT | PC → iPhone | Heartbeat |
+| 7 | HAPTIC | PC → iPhone | Haptic Data |
 
 Note: HELLO/ACK/BYE (types 1, 2, 4) are not used in BLE—connection state is managed by the BLE stack.
 
@@ -144,6 +146,36 @@ POSE_FORMAT = "<4sBBHQBB7f"  # little-endian, 46 bytes
 | 1 | RECORDING | `1`=start, `0`=stop |
 | 2 | KEEP_RECORDING | `1`=keep, `0`=discard |
 
+### 5. Haptic Data Characteristic
+
+- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF67`
+- **Properties**: Read, Notify
+- **Format**: Binary HAPTIC packet (12 bytes)
+
+#### HAPTIC Packet (PC → iPhone)
+
+| Offset | Field | Type | Bytes |
+|--------|-------|------|-------|
+| 0 | header | - | 6 |
+| 6 | intensity | `float32` | 4 |
+| 10 | channel | `uint8` | 1 |
+| 11 | reserved | `uint8` | 1 |
+| **Total** | | | **12** |
+
+- `intensity`: Haptic intensity from 0.0 (off) to 1.0 (max vibration)
+- `channel`: Reserved for future use (always 0)
+
+#### Python Struct
+
+```python
+HAPTIC_FORMAT = "<4sBBfBB"  # little-endian, 12 bytes
+```
+
+**Usage:**
+- PC updates haptic value when robot sensor data changes (e.g., force feedback)
+- iPhone subscribes to notifications on this characteristic
+- iPhone triggers haptic feedback proportional to intensity value
+
 ---
 
 ## Disconnect Detection
@@ -200,6 +232,7 @@ HEADER_FORMAT = "<4sBB"  # magic, msg_type, version
 POSE_FORMAT = "<4sBBHQBB7f"
 CMD_FORMAT = "<4sBBBB"
 HEARTBEAT_FORMAT = "<4sBBII"
+HAPTIC_FORMAT = "<4sBBfBB"
 
 def parse_pose(data: bytes) -> dict:
     """Parse POSE packet to dict matching callback format."""
@@ -220,6 +253,11 @@ def parse_pose(data: bytes) -> dict:
 def pack_heartbeat(counter: int, uptime_ms: int) -> bytes:
     """Pack HEARTBEAT packet for BLE characteristic."""
     return struct.pack(HEARTBEAT_FORMAT, b"TELE", 6, 1, counter, uptime_ms)
+
+def pack_haptic(intensity: float, channel: int = 0) -> bytes:
+    """Pack HAPTIC packet for BLE characteristic."""
+    intensity = max(0.0, min(1.0, intensity))  # Clamp to valid range
+    return struct.pack(HAPTIC_FORMAT, b"TELE", 7, 1, intensity, channel, 0)
 ```
 
 ---
@@ -230,10 +268,12 @@ def pack_heartbeat(counter: int, uptime_ms: int) -> bytes:
 2. **QR code displayed**: Shows peripheral name + 6-char code
 3. **User scans QR**: Televoodoo App discovers and connects
 4. **Authentication**: App writes code to Auth characteristic
-5. **Heartbeat starts**: Python updates heartbeat at 2 Hz
-6. **Pose streaming**: App writes binary POSE packets
-7. **Commands**: App writes binary CMD packets as needed
-8. **Disconnect**: BLE disconnection OR heartbeat timeout
+5. **Subscribe to notifications**: App subscribes to Heartbeat and Haptic characteristics
+6. **Heartbeat starts**: Python updates heartbeat at 2 Hz
+7. **Pose streaming**: App writes binary POSE packets
+8. **Haptic feedback**: Python sends HAPTIC packets when sensor values change
+9. **Commands**: App writes binary CMD packets as needed
+10. **Disconnect**: BLE disconnection OR heartbeat timeout
 
 ---
 
@@ -246,5 +286,6 @@ BLE MTU is typically 20-512 bytes depending on negotiation. The packets are desi
 | POSE | 46 bytes | No (needs MTU negotiation) |
 | CMD | 8 bytes | Yes |
 | HEARTBEAT | 14 bytes | Yes |
+| HAPTIC | 12 bytes | Yes |
 
 **Recommendation**: iOS app should request MTU ≥ 64 bytes during connection. Most modern devices support 185+ bytes.

@@ -112,6 +112,7 @@ Complete examples can be found in `examples/`:
 | `poll_poses/` | Poll latest pose at a fixed rate |
 | `measure_frequency/` | Measure pose input frequency |
 | `record_poses/` | Record poses to a JSON file |
+| `haptic_feedback/` | Send haptic feedback with simulated sensor values |
 
 
 
@@ -360,6 +361,57 @@ start_televoodoo(
 
 
 ## Advanced Topics
+
+### Haptic Feedback
+
+Send haptic feedback to the iOS app based on robot sensor values (e.g., force feedback).
+The `send_haptic` function normalizes your sensor values to 0.0–1.0 intensity and transmits
+them to the phone, which generates haptic vibrations accordingly.
+
+```python
+import threading
+import time
+from televoodoo import start_televoodoo, send_haptic, PoseProvider, load_config
+
+# --- Force Monitoring Thread ---
+# Runs independently to read robot force values and send haptic feedback
+
+def force_monitor_loop():
+    """Monitor robot force and send haptic feedback to the iOS app."""
+    while True:
+        force = robot.get_force()  # e.g., 0–50 Newtons
+        # Normalize to 0.0–1.0 and send to iPhone
+        send_haptic(force, min_value=0.0, max_value=50.0)
+        time.sleep(0.05)  # 20 Hz update rate
+
+# Start force monitoring in background thread
+monitor_thread = threading.Thread(target=force_monitor_loop, daemon=True)
+monitor_thread.start()
+
+# --- Teleoperation Callback ---
+# Receives poses from the iOS app
+
+config = load_config("my_robot_config.json")
+pose_provider = PoseProvider(config)
+
+def on_teleop_event(evt):
+    delta = pose_provider.get_delta(evt)
+    if delta is None:
+        return
+    # Send delta to robot...
+    robot.move_relative(delta['dx'], delta['dy'], delta['dz'])
+
+# Start televoodoo (blocks until disconnected)
+start_televoodoo(callback=on_teleop_event, quiet=True)
+```
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `value` | float | The sensor value to send (e.g., force in Newtons) |
+| `min_value` | float | Minimum expected value (maps to intensity 0.0) |
+| `max_value` | float | Maximum expected value (maps to intensity 1.0) |
+
+The function is thread-safe and can be called from any thread while `start_televoodoo` is running.
 
 ### Quiet Mode
 

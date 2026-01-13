@@ -27,6 +27,7 @@ POSE_FORMAT = "<4sBBHQBB7f"  # header + seq(2) + ts(8) + flags(1) + reserved(1) 
 BYE_FORMAT = "<4sBBI"  # header + session_id(4) = 10 bytes
 CMD_FORMAT = "<4sBBBB"  # header + cmd_type(1) + value(1) = 8 bytes
 HEARTBEAT_FORMAT = "<4sBBII"  # header + counter(4) + uptime_ms(4) = 14 bytes
+HAPTIC_FORMAT = "<4sBBfBB"  # header + intensity(4) + channel(1) + reserved(1) = 12 bytes
 
 # Sizes
 HEADER_SIZE = 6
@@ -36,6 +37,7 @@ POSE_SIZE = 46
 BYE_SIZE = 10
 CMD_SIZE = 8
 HEARTBEAT_SIZE = 14
+HAPTIC_SIZE = 12
 
 
 class MsgType(IntEnum):
@@ -46,6 +48,7 @@ class MsgType(IntEnum):
     BYE = 4
     CMD = 5
     HEARTBEAT = 6
+    HAPTIC = 7
 
 
 class AckStatus(IntEnum):
@@ -123,6 +126,17 @@ class HeartbeatMsg:
     """HEARTBEAT message (PC → iPhone, BLE only)."""
     counter: int
     uptime_ms: int
+
+
+@dataclass
+class HapticMsg:
+    """HAPTIC message (PC → iPhone).
+    
+    Used to trigger haptic feedback on the iPhone based on robot sensor values.
+    The intensity is normalized to 0.0-1.0 range by the sender.
+    """
+    intensity: float  # 0.0 to 1.0
+    channel: int = 0  # Reserved for future use (e.g., multiple haptic motors)
 
 
 # =============================================================================
@@ -251,6 +265,21 @@ def pack_bye(session_id: int) -> bytes:
 def pack_cmd(cmd_type: CmdType, value: int) -> bytes:
     """Pack CMD message."""
     return struct.pack(CMD_FORMAT, MAGIC, MsgType.CMD, PROTOCOL_VERSION, cmd_type, value)
+
+
+def pack_haptic(intensity: float, channel: int = 0) -> bytes:
+    """Pack HAPTIC message.
+    
+    Args:
+        intensity: Haptic intensity from 0.0 (off) to 1.0 (max)
+        channel: Haptic channel (reserved for future use, default 0)
+    
+    Returns:
+        12-byte HAPTIC message
+    """
+    # Clamp intensity to valid range
+    intensity = max(0.0, min(1.0, intensity))
+    return struct.pack(HAPTIC_FORMAT, MAGIC, MsgType.HAPTIC, PROTOCOL_VERSION, intensity, channel, 0)
 
 
 # =============================================================================

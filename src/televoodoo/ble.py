@@ -13,6 +13,26 @@ from typing import Any, Callable, Dict, Iterator, Optional
 
 from .pose import Pose
 
+# Active BLE haptic sender (registered by platform backends)
+_ble_send_haptic: Optional[Callable[[float], bool]] = None
+
+
+def register_ble_haptic_sender(sender: Optional[Callable[[float], bool]]) -> None:
+    """Register a BLE haptic sender callable (set by platform-specific backend)."""
+    global _ble_send_haptic
+    _ble_send_haptic = sender
+
+
+def send_haptic_ble(intensity: float) -> bool:
+    """Send haptic via BLE if a sender is registered."""
+    sender = _ble_send_haptic
+    if sender is None:
+        return False
+    try:
+        return bool(sender(intensity))
+    except Exception:
+        return False
+
 # Suppress high-frequency event logging when True
 QUIET_HIGH_FREQUENCY = False
 
@@ -59,7 +79,7 @@ def run_peripheral(
             _mac.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _mac.run_macos_peripheral(name, code, callback)
+        _mac.run_macos_peripheral(name, code, callback, register_ble_haptic_sender)
 
     elif system == "linux" and distro == "ubuntu":
         import televoodoo.ble_peripheral_ubuntu as _ubu  # type: ignore
@@ -68,7 +88,7 @@ def run_peripheral(
             _ubu.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _ubu.run_ubuntu_peripheral(name, code, callback)
+        _ubu.run_ubuntu_peripheral(name, code, callback, register_ble_haptic_sender)
 
     else:
         raise RuntimeError(

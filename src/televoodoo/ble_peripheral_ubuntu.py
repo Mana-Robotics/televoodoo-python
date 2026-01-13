@@ -20,6 +20,7 @@ CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
 CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
+CHAR_HAPTIC_UUID = "1C8FD138-FC18-4846-954D-E509366AEF67"
 
 # Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
@@ -45,12 +46,14 @@ def emit_event(evt: Dict[str, Any]) -> None:
 
 
 class UbuntuPeripheral:
-    def __init__(self, name: str, expected_code: str):
+    def __init__(self, name: str, expected_code: str, haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None):
         self.name = name
         self.expected_code = expected_code
         self.heartbeat_counter = 0
         self._start_time = time.monotonic()
         self._hb_thread: Optional[threading.Thread] = None
+        self._haptic_sender_cb = haptic_sender_cb
+        self._latest_haptic: bytes = protocol.pack_haptic(0.0)
 
         # Adapter
         adpts = list(adapter.Adapter.available())
@@ -72,6 +75,7 @@ class UbuntuPeripheral:
         self.ctrl_id = 3
         self.pose_id = 4
         self.cmd_id = 5
+        self.haptic_id = 6
 
         self.ble.add_service(srv_id=self.srv_id, uuid=SERVICE_UUID, primary=True)
 
@@ -131,6 +135,37 @@ class UbuntuPeripheral:
             write_callback=self._command_write,
         )
 
+        # Haptic (read/notify)
+        self.ble.add_characteristic(
+            srv_id=self.srv_id,
+            chr_id=self.haptic_id,
+            uuid=CHAR_HAPTIC_UUID,
+            value=list(self._latest_haptic),
+            notifying=False,
+            flags=['read', 'notify'],
+            read_callback=self._haptic_read,
+            notify_callback=self._haptic_notify,
+        )
+
+        # Register haptic sender
+        if self._haptic_sender_cb:
+            def _send_haptic(intensity: float) -> bool:
+                try:
+                    self._latest_haptic = protocol.pack_haptic(intensity)
+                    # notify subscribers
+                    try:
+                        self.ble.send_notify(self.srv_id, self.haptic_id)
+                    except Exception:
+                        pass
+                    return True
+                except Exception:
+                    return False
+
+            try:
+                self._haptic_sender_cb(_send_haptic)
+            except Exception:
+                pass
+
     def _hb_read(self) -> list[int]:
         """Handle heartbeat read - binary format."""
         uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
@@ -143,6 +178,14 @@ class UbuntuPeripheral:
         uptime_ms = int((time.monotonic() - self._start_time) * 1000) & 0xFFFFFFFF
         b = protocol.pack_heartbeat(self.heartbeat_counter, uptime_ms)
         return list(b)
+
+    def _haptic_read(self) -> list[int]:
+        """Return latest haptic packet."""
+        return list(self._latest_haptic)
+
+    def _haptic_notify(self) -> list[int]:
+        """Notify latest haptic packet."""
+        return list(self._latest_haptic)
 
     def _auth_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
         try:
@@ -268,7 +311,12 @@ class UbuntuPeripheral:
             pass
 
 
-def run_ubuntu_peripheral(name: str, expected_code: str, callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> None:
+def run_ubuntu_peripheral(
+    name: str,
+    expected_code: str,
+    callback: Optional[Callable[[Dict[str, Any]], None]] = None,
+    haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None,
+) -> None:
     global _evt_cb
     _evt_cb = callback
     
@@ -277,5 +325,5 @@ def run_ubuntu_peripheral(name: str, expected_code: str, callback: Optional[Call
     if not addr or 'miniforge' in addr or 'conda' in addr:
         os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = 'unix:path=/var/run/dbus/system_bus_socket'
     
-    periph = UbuntuPeripheral(name, expected_code)
+    periph = UbuntuPeripheral(name, expected_code, haptic_sender_cb)
     periph.start()

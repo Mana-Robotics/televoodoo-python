@@ -82,6 +82,7 @@ All messages use **little-endian** byte order (native to ARM/x86, more efficient
 | 3 | POSE | iPhone → PC |
 | 4 | BYE | iPhone → PC |
 | 5 | CMD | iPhone → PC |
+| 7 | HAPTIC | PC → iPhone |
 
 ---
 
@@ -217,6 +218,50 @@ Command signals (recording, etc.).
 Command types:
 - `1` = RECORDING: value `1`=start, `0`=stop
 - `2` = KEEP_RECORDING: value `1`=keep, `0`=discard
+
+### HAPTIC (PC → iPhone)
+
+Haptic feedback signal. Sent from Python to trigger haptic vibrations on the iPhone.
+
+| Offset | Field | Type | Bytes |
+|--------|-------|------|-------|
+| 0 | header | - | 6 |
+| 6 | intensity | `float32` | 4 |
+| 10 | channel | `uint8` | 1 |
+| 11 | reserved | `uint8` | 1 |
+| **Total** | | | **12** |
+
+- `intensity`: Haptic intensity from 0.0 (off) to 1.0 (maximum vibration)
+- `channel`: Reserved for future use (default 0)
+
+#### Python Struct
+
+```python
+HAPTIC_FORMAT = "<4sBBfBB"  # little-endian, 12 bytes
+```
+
+#### Usage Example
+
+```python
+import threading
+import time
+from televoodoo import start_televoodoo, send_haptic
+
+def force_monitor_loop():
+    """Monitor robot force values and send haptic feedback."""
+    while True:
+        force = robot.get_force()  # e.g., 0-50 Newtons
+        # Normalize force to 0.0-1.0 and send to iPhone
+        send_haptic(force, min_value=0.0, max_value=50.0)
+        time.sleep(0.05)  # 20 Hz update rate
+
+# Start force monitoring in background thread
+monitor_thread = threading.Thread(target=force_monitor_loop, daemon=True)
+monitor_thread.start()
+
+# Start televoodoo (blocks until disconnected)
+start_televoodoo(callback=on_teleop_event, quiet=True)
+```
 
 ---
 

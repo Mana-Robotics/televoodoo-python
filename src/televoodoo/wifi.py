@@ -35,6 +35,10 @@ QUIET_HIGH_FREQUENCY = False
 # mDNS service type
 SERVICE_TYPE = "_televoodoo._udp.local."
 
+# Module-level reference to active server (for send_haptic access from other threads)
+_active_server: "Optional[WlanServer]" = None
+_server_lock = threading.Lock()
+
 
 @dataclass
 class Session:
@@ -267,6 +271,29 @@ class WlanServer:
             except Exception:
                 pass
     
+    def send_haptic(self, intensity: float) -> bool:
+        """Send haptic feedback to the connected iPhone.
+        
+        This method is thread-safe and can be called from any thread (e.g., a
+        robot monitoring thread that reads force values).
+        
+        Args:
+            intensity: Haptic intensity from 0.0 (off) to 1.0 (max).
+                      Values are clamped to this range.
+        
+        Returns:
+            True if the message was sent, False if no client is connected.
+        """
+        if self.sock is None or self.session is None:
+            return False
+        
+        try:
+            haptic_data = protocol.pack_haptic(intensity)
+            self.sock.sendto(haptic_data, self.session.client_addr)
+            return True
+        except Exception:
+            return False
+    
     def _check_session_timeout(self) -> None:
         """Background thread to check session timeout."""
         while self.running:
@@ -317,12 +344,18 @@ class WlanServer:
     
     def start(self) -> None:
         """Start the WIFI server."""
+        global _active_server
+        
         self._emit({
             "type": "wifi_starting",
             "name": self.name,
             "port": self.port,
             "ip": self.local_ip,
         })
+        
+        # Register as active server for module-level send_haptic access
+        with _server_lock:
+            _active_server = self
         
         # Create UDP socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -353,7 +386,14 @@ class WlanServer:
     
     def stop(self) -> None:
         """Stop the WIFI server."""
+        global _active_server
+        
         self.running = False
+        
+        # Unregister as active server
+        with _server_lock:
+            if _active_server is self:
+                _active_server = None
         
         # Close session if active
         if self.session is not None:
@@ -435,3 +475,61 @@ def get_server_url(port: int = DEFAULT_PORT) -> str:
     """
     ip = _get_local_ip()
     return f"udp://{ip}:{port}"
+
+
+def send_haptic(value: float, min_value: float = 0.0, max_value: float = 1.0) -> bool:
+    """Send haptic feedback to the connected iPhone.
+    
+    This function normalizes the input value to a 0.0-1.0 intensity range
+    and sends it to the iOS app, which generates haptic signals accordingly.
+    
+    This function is thread-safe and can be called from any thread, e.g.,
+    from a robot monitoring loop that reads force sensor values.
+    
+    Args:
+        value: The scalar value to send (e.g., force reading from robot).
+        min_value: The minimum expected value (maps to intensity 0.0).
+        max_value: The maximum expected value (maps to intensity 1.0).
+    
+    Returns:
+        True if the message was sent successfully, False if no client
+        is connected or if the server is not running.
+    
+    Example:
+        >>> import threading
+        >>> import time
+        >>> from televoodoo import send_haptic
+        >>> 
+        >>> def force_monitor_loop():
+        ...     '''Run in separate thread to monitor robot force values.'''
+        ...     while True:
+        ...         force = robot.get_force()  # e.g., 0-50 Newtons
+        ...         send_haptic(force, min_value=0.0, max_value=50.0)
+        ...         time.sleep(0.05)  # 20 Hz update
+        >>> 
+        >>> # Start monitoring thread before starting televoodoo
+        >>> thread = threading.Thread(target=force_monitor_loop, daemon=True)
+        >>> thread.start()
+    """
+    # Handle edge case where min == max
+    if max_value == min_value:
+        intensity = 0.5
+    else:
+        # Normalize value to 0.0-1.0 range
+        intensity = (value - min_value) / (max_value - min_value)
+        # Clamp to valid range
+        intensity = max(0.0, min(1.0, intensity))
+    
+    # Get active WIFI server (thread-safe)
+    with _server_lock:
+        server = _active_server
+    
+    if server is not None:
+        return server.send_haptic(intensity)
+    
+    # Fallback to BLE haptic sender if available
+    try:
+        from . import ble
+        return ble.send_haptic_ble(intensity)
+    except Exception:
+        return False
