@@ -3,6 +3,8 @@
       "name": "myrobot",
       "code": "ABC123"
     },
+    "upsample_to_frequency_hz": null,
+    "rate_limit_frequency_hz": null,
     "includeFormats": {
       "absolute_input": true,
       "delta_input": false,

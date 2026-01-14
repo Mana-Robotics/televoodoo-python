@@ -1,12 +1,14 @@
 # Upsampled Control Example
 
-This example demonstrates high-frequency robot control using upsampling to convert phone poses (30-60 Hz) to a higher target frequency (e.g., 200 Hz).
+This example demonstrates high-frequency robot control using upsampling to convert phone poses (30-60 Hz) to a higher target frequency (e.g., 200 Hz) as preferred by many robot control apis.
 
 ## Why Upsample?
 
-Robot arm controllers often require higher frequency control inputs (100-200 Hz) than the phone can provide:
+Robot arm controllers often require higher frequency control inputs (100-200 Hz) than the phone-based pose stream can provide:
 - **WiFi**: ~60 Hz consistent
 - **BLE**: ~30 Hz (due to connection interval batching)
+
+While the effect on the achievable precission of the poses and paths are neglegtible, the continuity of the movements (velocities) can be effected, thus leading to slight stuttering or vibrations. This is caused by the robot moving to the target pose faster then the next target pose (teleop data) is available, which then leads to a short wait / stop and re-acceleration, then stop again and so on.
 
 Televoodoo uses **linear extrapolation** to predict poses between real samples, ensuring your robot receives smooth, high-frequency input.
 
@@ -22,17 +24,20 @@ Televoodoo uses **linear extrapolation** to predict poses between real samples, 
 Run from the `televoodoo/` directory:
 
 ```bash
-# Default 200 Hz upsampling (WiFi)
-python examples/upsampled_control/upsampled_control.py
+# 200 Hz upsampling (WiFi)
+python examples/data_upsampling/data_upsampling.py --upsample-hz 200
 
 # Custom frequency
-python examples/upsampled_control/upsampled_control.py --hz 100
+python examples/data_upsampling/data_upsampling.py --upsample-hz 100
 
 # Connect via BLE instead of WiFi
-python examples/upsampled_control/upsampled_control.py --connection ble
+python examples/data_upsampling/data_upsampling.py --upsample-hz 200 --connection ble
 
 # With config file
-python examples/upsampled_control/upsampled_control.py --config my_robot_config.json
+python examples/data_upsampling/data_upsampling.py --upsample-hz 200 --config my_robot_config.json
+
+# Without upsampling (shows warning message)
+python examples/data_upsampling/data_upsampling.py
 ```
 
 ## CLI Alternative

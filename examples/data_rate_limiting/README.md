@@ -11,15 +11,18 @@ Some robot controllers or simulations can only handle a limited update rate. Rat
 Run from the `televoodoo/` directory:
 
 ```bash
-# Limit to 30 Hz (default)
-python examples/rate_limit/rate_limit.py
+# Limit to 30 Hz
+python examples/data_rate_limiting/data_rate_limiting.py --rate-limit-hz 30
 
 # Limit to 10 Hz for slow consumers
-python examples/rate_limit/rate_limit.py --hz 10
+python examples/data_rate_limiting/data_rate_limiting.py --rate-limit-hz 10
 
 # Use specific connection
-python examples/rate_limit/rate_limit.py --connection wifi
-python examples/rate_limit/rate_limit.py --connection ble
+python examples/data_rate_limiting/data_rate_limiting.py --rate-limit-hz 30 --connection wifi
+python examples/data_rate_limiting/data_rate_limiting.py --rate-limit-hz 30 --connection ble
+
+# Without rate limiting (shows warning message)
+python examples/data_rate_limiting/data_rate_limiting.py
 ```
 
 ## How It Works

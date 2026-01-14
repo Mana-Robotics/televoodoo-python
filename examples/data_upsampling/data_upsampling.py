@@ -15,14 +15,19 @@ import argparse
 from televoodoo import start_televoodoo, PoseProvider, load_config
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--hz", type=float, default=200.0, help="Target frequency in Hz")
+parser.add_argument(
+    "--upsample-hz",
+    type=float,
+    default=None,
+    help="Target frequency in Hz (e.g., 200). If not provided, no upsampling is applied.",
+)
 parser.add_argument("--config", type=str, default=None, help="Config file path")
 parser.add_argument(
     "--connection",
     type=str,
-    choices=["auto", "ble", "wifi"],
+    choices=["auto", "ble", "wifi", "usb"],
     default="auto",
-    help="Connection type: 'auto' (default), 'ble', or 'wifi'",
+    help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
 )
 args = parser.parse_args()
 
@@ -33,9 +38,13 @@ pose_provider = PoseProvider(config)
 # Counter for statistics
 pose_count = 0
 
+# Determine print interval based on upsampling rate
+upsample_hz = args.upsample_hz
+print_interval = int(upsample_hz) if upsample_hz else 60  # Print ~once per second
+
 
 def robot_handler(evt):
-    """Called at ~200 Hz with real or extrapolated poses."""
+    """Called at target Hz with real or extrapolated poses."""
     global pose_count
     
     delta = pose_provider.get_delta(evt)
@@ -44,8 +53,8 @@ def robot_handler(evt):
     
     pose_count += 1
     
-    # Print every 200th pose (roughly once per second at 200 Hz)
-    if pose_count % 200 == 0:
+    # Print roughly once per second
+    if pose_count % print_interval == 0:
         print(
             f"[{pose_count}] "
             f"dx={delta['dx']:+.4f} dy={delta['dy']:+.4f} dz={delta['dz']:+.4f}"
@@ -55,14 +64,22 @@ def robot_handler(evt):
     # robot.send_delta(delta['dx'], delta['dy'], delta['dz'])
 
 
-print(f"Starting with {args.hz} Hz upsampling via {args.connection}...")
-print("Using regulated mode (default) for consistent timing.")
+if upsample_hz:
+    print(f"Starting with {upsample_hz} Hz upsampling via {args.connection}...")
+    print("Using regulated mode (default) for consistent timing.")
+else:
+    print("=" * 60)
+    print("NO UPSAMPLING - PLEASE PROVIDE CLI FLAG --upsample-hz <value>")
+    print("Example: python data_upsampling.py --upsample-hz 200")
+    print("=" * 60)
+    print(f"\nStarting without upsampling via {args.connection}...")
+
 print("Ctrl+C to exit.\n")
 
 # Just pass upsample_to_hz - resampling is handled internally
 start_televoodoo(
     callback=robot_handler,
     connection=args.connection,
-    upsample_to_hz=args.hz,
+    upsample_to_hz=upsample_hz,
     quiet=True,
 )
