@@ -9,12 +9,18 @@ Televoodoo Python uses QR codes to streamline the connection process between you
 | Type | Default | Latency | Requirements |
 |------|---------|---------|--------------|
 | **WiFi** | ✅ Yes | ~16ms consistent | Same network |
+| **USB** | No | ~5-10ms | USB cable + tethering enabled |
 | **BLE** | No | ~17ms average (batched) | Platform-specific |
 
 WiFi is recommended for:
 - Lower, more consistent latency
 - Cross-platform compatibility (works on Windows, Linux, macOS)
 - No platform-specific BLE dependencies
+
+USB is recommended for:
+- Lowest latency (wired connection)
+- No WiFi network available
+- Maximum reliability (no wireless interference)
 
 ## Connection Flow
 
@@ -26,6 +32,9 @@ televoodoo
 
 # WiFi with static credentials
 televoodoo --name myvoodoo --code ABC123
+
+# USB connection (lowest latency)
+televoodoo --connection usb --name myvoodoo --code ABC123
 
 # BLE connection (if needed)
 televoodoo --connection ble --name myvoodoo --code ABC123
@@ -49,6 +58,9 @@ start_televoodoo(callback=my_callback)
 
 # WiFi with static credentials
 start_televoodoo(callback=my_callback, name="myvoodoo", code="ABC123")
+
+# USB connection (lowest latency)
+start_televoodoo(callback=my_callback, name="myvoodoo", code="ABC123", connection="usb")
 
 # BLE connection (if needed)
 start_televoodoo(callback=my_callback, name="myvoodoo", code="ABC123", connection="ble")
@@ -108,6 +120,18 @@ The QR code contains a JSON string with connection credentials and transport inf
 }
 ```
 
+**USB:**
+```json
+{
+  "name": "myvoodoo",
+  "code": "ABC123",
+  "transport": "usb",
+  "ip": "192.168.42.129",
+  "port": 50000,
+  "phone_ip": "192.168.42.1"
+}
+```
+
 **BLE:**
 ```json
 {
@@ -128,11 +152,13 @@ The QR code contains a JSON string with connection credentials and transport inf
   - Static mode: Your custom code
   - Format: Uppercase letters and digits (A-Z, 0-9)
 
-- **transport** (string): Connection type (`"wifi"` or `"ble"`)
+- **transport** (string): Connection type (`"wifi"`, `"usb"`, or `"ble"`)
 
-- **ip** (string, WiFi only): Server IP address on local network
+- **ip** (string, WiFi/USB only): Server IP address on local/USB network
 
-- **port** (number, WiFi only): UDP port (default: 50000)
+- **port** (number, WiFi/USB only): UDP port (default: 50000)
+
+- **phone_ip** (string, USB only): Phone's IP on USB interface (for verification)
 
 ### Example QR Code Contents
 
@@ -144,6 +170,18 @@ The QR code contains a JSON string with connection credentials and transport inf
   "transport": "wifi",
   "ip": "192.168.1.50",
   "port": 50000
+}
+```
+
+**USB with detected interface:**
+```json
+{
+  "name": "my_robot_arm",
+  "code": "ROBOT1",
+  "transport": "usb",
+  "ip": "192.168.42.129",
+  "port": 50000,
+  "phone_ip": "192.168.42.1"
 }
 ```
 
@@ -338,6 +376,13 @@ Everyone on the team can connect their phones using the same credentials.
 - UDP port 50000 (or custom via `--wifi-port`) must not be blocked by firewall
 - mDNS discovery requires `zeroconf` package (auto-installed)
 
+### All Platforms (USB)
+- Requires USB cable (data-capable, not charge-only)
+- **Android**: Enable USB Tethering in Settings → Network → Hotspot & Tethering
+- **iOS on macOS**: Use **macOS Internet Sharing** (System Settings → General → Sharing → Internet Sharing), share your WiFi to "iPhone USB" — do NOT use iPhone Personal Hotspot
+- No mDNS required (direct IP connection)
+- See **USB_API.md** for detailed prerequisites per platform
+
 ### macOS (BLE)
 - Bluetooth permissions may require user approval on first run
 - Works reliably with native Core Bluetooth
@@ -347,8 +392,12 @@ Everyone on the team can connect their phones using the same credentials.
 - May need to run with `sudo` depending on BlueZ configuration
 - Install system headers: `sudo apt-get install libdbus-1-dev libglib2.0-dev`
 
+### Ubuntu/Linux (USB + iOS)
+- Requires additional packages: `sudo apt install libimobiledevice6 usbmuxd`
+
 ### Windows
 - WiFi works out of the box
+- USB works with appropriate drivers (built-in for most modern phones)
 - BLE is not supported
 
 ## Security Considerations
@@ -368,6 +417,7 @@ Everyone on the team can connect their phones using the same credentials.
 ## See Also
 
 - **WIFI_API.md**: Technical details on the WiFi/UDP protocol (default)
+- **USB_API.md**: USB tethering connection guide and prerequisites
 - **BLE_API.md**: Technical details on the BLE service
 - **POSE_DATA_FORMAT.md**: What data your callback receives
 - **examples/**: Sample applications showing complete workflows

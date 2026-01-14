@@ -16,10 +16,10 @@ parser.add_argument("--plot", action="store_true", help="Save Δt plot to exampl
 parser.add_argument(
     "--connection", "--transport",
     type=str,
-    choices=["auto", "ble", "wifi"],
+    choices=["auto", "ble", "wifi", "usb"],
     default="auto",
     dest="connection",
-    help="Connection type: 'auto' (default), 'ble', or 'wifi'",
+    help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
 )
 parser.add_argument("--wifi-port", type=int, default=50000, help="UDP port for WIFI")
 parser.add_argument(

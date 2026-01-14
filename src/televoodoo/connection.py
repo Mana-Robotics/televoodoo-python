@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .config import OutputConfig
 
 
-ConnectionType = Literal["auto", "ble", "wifi"]
+ConnectionType = Literal["auto", "ble", "wifi", "usb"]
 
 
 def start_televoodoo(
@@ -42,8 +42,8 @@ def start_televoodoo(
         quiet: Suppress high-frequency logging (pose, heartbeat)
         name: Static peripheral/server name (default: random)
         code: Static auth code (default: random)
-        connection: Connection type - "auto" (default), "ble", or "wifi"
-        wifi_port: UDP port for WIFI server (default: 50000)
+        connection: Connection type - "auto" (default), "ble", "wifi", or "usb"
+        wifi_port: UDP port for WIFI/USB server (default: 50000)
         upsample_to_hz: Upsample poses to target frequency using linear extrapolation.
             Useful for robot controllers requiring higher frequency input (100-200 Hz).
         rate_limit_hz: Limit output to maximum frequency (drops excess poses).
@@ -69,11 +69,22 @@ def start_televoodoo(
         resolved_connection = _detect_best_connection()
 
     # Print session/QR with transport info so phone app knows how to connect
+    # For USB, we use "wifi" transport in QR code for backward compatibility
+    # (the protocol is identical - just UDP to an IP address)
+    qr_transport = "wifi" if resolved_connection == "usb" else resolved_connection
+    
+    # For USB, we must explicitly pass the USB interface IP
+    qr_wifi_ip = None
+    if resolved_connection == "usb":
+        from . import usb
+        qr_wifi_ip = usb.get_usb_ip()
+    
     print_session_qr(
         name=name,
         code=code,
-        transport=resolved_connection,
-        wifi_port=wifi_port if resolved_connection == "wifi" else None,
+        transport=qr_transport,
+        wifi_port=wifi_port if resolved_connection in ("wifi", "usb") else None,
+        wifi_ip=qr_wifi_ip,  # Pass USB IP when using USB
     )
 
     # Resolve resampling settings from config if not provided directly
@@ -123,6 +134,8 @@ def start_televoodoo(
             _start_ble(name, code, effective_callback, quiet)
         elif resolved_connection == "wifi":
             _start_wifi(name, code, effective_callback, quiet, wifi_port)
+        elif resolved_connection == "usb":
+            _start_usb(name, code, effective_callback, quiet, wifi_port)
         else:
             raise RuntimeError(f"Unknown connection type: {resolved_connection}")
     except Exception as e:
@@ -172,3 +185,16 @@ def _start_wifi(
     from . import wifi
 
     wifi.run_server(name, code, callback, quiet, port)
+
+
+def _start_usb(
+    name: str,
+    code: str,
+    callback: Optional[Callable[[Dict[str, Any]], None]],
+    quiet: bool,
+    port: int,
+) -> None:
+    """Start USB tethering server backend."""
+    from . import usb
+
+    usb.run_server(name, code, callback, quiet, port)

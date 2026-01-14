@@ -6,8 +6,8 @@
 
 ### The Televoodoo Ecosystem
 
-- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Receive 6DoF poses from the Televoodoo App via WiFi or BLE, with pose handling, coordinate transforms, and more
-- **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via WiFi or BLE
+- **[Televoodoo Python](https://github.com/Mana-Robotics/televoodoo-python)** (this project) — Receive 6DoF poses from the Televoodoo App via WiFi, USB, or BLE, with pose handling, coordinate transforms, and more
+- **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via WiFi, USB, or BLE
 - **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
 
@@ -16,12 +16,14 @@
 
 ### Platform Notes
 
-| Platform | WiFi (default) | BLE (optional) |
-|----------|----------------|----------------|
-| **macOS** | ✅ Works out of box | PyObjC frameworks (auto-installed) |
-| **Ubuntu** | ✅ Works out of box | BlueZ: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
-| **Windows** | ✅ Works out of box | Not supported |
-| **Other** | ✅ Works out of box | Not supported |
+| Platform | WiFi (default) | USB | BLE |
+|----------|----------------|-----|-----|
+| **macOS** | ✅ Works out of box | ✅ Android: USB Tethering, iOS: Mac Internet Sharing* | PyObjC frameworks (auto-installed) |
+| **Ubuntu** | ✅ Works out of box | ✅ Android: USB Tethering (iOS needs libimobiledevice) | BlueZ: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
+| **Windows** | ✅ Works out of box | ✅ (may need drivers) | Not supported |
+| **Other** | ✅ Works out of box | Platform dependent | Not supported |
+
+> \* **iOS USB on macOS**: Use **macOS Internet Sharing** (System Settings → Sharing → Internet Sharing, share WiFi to "iPhone USB"), NOT iPhone Personal Hotspot. See [USB_API.md](docs/USB_API.md) for details.
 
 
 ### 1. Install
@@ -248,20 +250,24 @@ You can specify the connection backend:
 ```python
 start_televoodoo(
     callback=handle_pose,
-    connection="auto"  # Options: "auto" (default), "wifi", "ble"
+    connection="auto"  # Options: "auto" (default), "wifi", "usb", "ble"
 )
 ```
 
 - **`"auto"`** (default): Uses WiFi — recommended for best latency and cross-platform compatibility
 - **`"wifi"`**: UDP-based connection over local network (~60Hz consistent frequency / ~16ms latency)
+- **`"usb"`**: USB tethering connection (~60Hz / ~5-10ms latency) — lowest latency, requires USB cable
 - **`"ble"`**: Bluetooth Low Energy connection (platform-specific, subject to connection interval batching (e.g. iOS), resulting in effectively only ~30 Hz of update frequency / 32ms latency)
 
 Or via CLI:
 
 ```bash
 televoodoo --connection wifi   # WiFi (default)
+televoodoo --connection usb    # USB tethering (lowest latency)
 televoodoo --connection ble    # Bluetooth
 ```
+
+> 💡 **USB Connection**: For Android, enable USB Tethering on the phone. For iOS on macOS, enable **macOS Internet Sharing** (share WiFi to "iPhone USB") — NOT iPhone Personal Hotspot. See [USB API docs](docs/USB_API.md) for details.
 
 ## Config Files
 
@@ -479,6 +485,7 @@ For in-depth technical details, see `docs/`:
 - **[Pose Data Format](docs/POSE_DATA_FORMAT.md)** — Coordinate systems, field descriptions, validation
 - **[Connection Setup](docs/CONNECTION_SETUP.md)** — QR codes, credentials, multi-device setup
 - **[WiFi API](docs/WIFI_API.md)** — UDP protocol, mDNS discovery (default connection)
+- **[USB API](docs/USB_API.md)** — USB tethering setup, prerequisites, lowest latency option
 - **[BLE Peripheral API](docs/BLE_API.md)** — Service UUIDs, characteristics, protocol details
 
 

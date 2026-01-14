@@ -11,6 +11,9 @@ python examples/measure_frequency/measure_frequency.py --samples 100
 # Measure upsampled frequency (verify PoseResampler output)
 python examples/measure_frequency/measure_frequency.py --samples 500 --upsample-hz 200
 
+# Connect via USB (lowest latency)
+python examples/measure_frequency/measure_frequency.py --connection usb
+
 # Connect via BLE
 python examples/measure_frequency/measure_frequency.py --connection ble
 ```

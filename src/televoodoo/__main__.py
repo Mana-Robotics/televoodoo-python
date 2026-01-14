@@ -3,6 +3,7 @@
 Usage:
     python -m televoodoo [--name NAME] [--code CODE] [--config CONFIG]
     python -m televoodoo --transport wifi [--wifi-port 50000]
+    python -m televoodoo --transport usb [--wifi-port 50000]
 """
 
 import argparse
@@ -35,10 +36,10 @@ def main() -> int:
         "--connection",
         "--transport",
         type=str,
-        choices=["auto", "ble", "wifi"],
+        choices=["auto", "ble", "wifi", "usb"],
         default="auto",
         dest="connection",
-        help="Connection type: 'auto' (default), 'ble', or 'wifi'",
+        help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
     )
     parser.add_argument(
         "--wifi-port",
