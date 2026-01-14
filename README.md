@@ -113,7 +113,8 @@ Complete examples can be found in `examples/`:
 | `measure_frequency/` | Measure pose input frequency |
 | `record_poses/` | Record poses to a JSON file |
 | `haptic_feedback/` | Send haptic feedback with simulated sensor values |
-| `upsampled_control/` | High-frequency robot control with upsampled poses (200 Hz) |
+| `data_upsampling/` | High-frequency robot control with upsampled poses (200 Hz) |
+| `data_rate_limiting/` | Rate-limited pose output (cap frequency) |
 
 
 
@@ -283,6 +284,8 @@ Config files define how poses are transformed from the ArUco marker frame to you
     "name": "myrobot",
     "code": "ABC123"
   },
+  "upsample_to_frequency_hz": 200.0,
+  "rate_limit_frequency_hz": null,
   "includeFormats": {
     "absolute_input": true,
     "delta_input": false,
@@ -319,6 +322,8 @@ Config files define how poses are transformed from the ArUco marker frame to you
 | `scale` | Scale factor applied to positions |
 | `outputAxes` | Axis multipliers (use `-1` to flip an axis) |
 | `targetFrameDegrees` | 6DoF transform: marker → target frame (position in meters, rotation in degrees) |
+| `upsample_to_frequency_hz` | Upsample poses to target frequency (Hz) using linear extrapolation |
+| `rate_limit_frequency_hz` | Limit output to maximum frequency (Hz), drops excess poses |
 
 ### Creating Config Files
 
@@ -393,7 +398,8 @@ start_televoodoo(callback=robot_handler, upsample_to_hz=200.0, quiet=True)
 **Via Config File:**
 ```json
 {
-  "upsample_to_frequency_hz": 200.0
+  "upsample_to_frequency_hz": 200.0,
+  "rate_limit_frequency_hz": 30.0
 }
 ```
 
@@ -403,6 +409,11 @@ config = load_config("my_robot_config.json")
 start_televoodoo(callback=handler, config=config)
 ```
 
+| Config Key | CLI Flag | Description |
+|------------|----------|-------------|
+| `upsample_to_frequency_hz` | `--upsample-hz` | Upsample to target frequency (Hz) using linear extrapolation |
+| `rate_limit_frequency_hz` | `--rate-limit-hz` | Cap output at maximum frequency (Hz) |
+
 **Key behaviors:**
 - Real poses forwarded immediately (zero added latency)
 - Extrapolated poses fill gaps using velocity-based prediction
@@ -410,7 +421,7 @@ start_televoodoo(callback=handler, config=config)
 
 > 💡 **Note:** Upsampling uses **regulated mode by default** for consistent timing at the target frequency. This outputs at fixed intervals with ~5ms max latency — ideal for robot controllers. Use `--no-regulated` if you prefer zero latency with irregular timing.
 
-See `examples/upsampled_control/` for a complete example.
+See `examples/data_upsampling/` for a complete example.
 
 ### Haptic Feedback
 

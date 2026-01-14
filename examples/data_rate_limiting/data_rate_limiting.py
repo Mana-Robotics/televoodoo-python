@@ -14,14 +14,19 @@ import argparse
 from televoodoo import start_televoodoo, PoseProvider, load_config
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--hz", type=float, default=30.0, help="Maximum frequency in Hz")
+parser.add_argument(
+    "--rate-limit-hz",
+    type=float,
+    default=None,
+    help="Maximum frequency in Hz (e.g., 30). If not provided, no rate limiting is applied.",
+)
 parser.add_argument("--config", type=str, default=None, help="Config file path")
 parser.add_argument(
     "--connection",
     type=str,
-    choices=["auto", "ble", "wifi"],
+    choices=["auto", "ble", "wifi", "usb"],
     default="auto",
-    help="Connection type: 'auto' (default), 'ble', or 'wifi'",
+    help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
 )
 args = parser.parse_args()
 
@@ -31,6 +36,9 @@ pose_provider = PoseProvider(config)
 
 # Counter for statistics
 pose_count = 0
+
+# Get rate limit value
+rate_limit_hz = args.rate_limit_hz
 
 
 def on_pose(evt):
@@ -50,13 +58,21 @@ def on_pose(evt):
     )
 
 
-print(f"Starting with {args.hz} Hz rate limit via {args.connection}...")
-print("Excess poses will be dropped to maintain this rate.")
+if rate_limit_hz:
+    print(f"Starting with {rate_limit_hz} Hz rate limit via {args.connection}...")
+    print("Excess poses will be dropped to maintain this rate.")
+else:
+    print("=" * 65)
+    print("NO RATE LIMITING - PLEASE PROVIDE CLI FLAG --rate-limit-hz <value>")
+    print("Example: python data_rate_limiting.py --rate-limit-hz 30")
+    print("=" * 65)
+    print(f"\nStarting without rate limiting via {args.connection}...")
+
 print("Ctrl+C to exit.\n")
 
 start_televoodoo(
     callback=on_pose,
     connection=args.connection,
-    rate_limit_hz=args.hz,
+    rate_limit_hz=rate_limit_hz,
     quiet=True,
 )
