@@ -37,26 +37,45 @@ No IP address is needed — mDNS handles discovery automatically.
 
 ## Prerequisites
 
+> ⚠️ **Important**: iOS and Android require **opposite** configurations!
+
 ### macOS + iOS
 
 > **Use macOS Internet Sharing** (Mac shares its network to iPhone via USB).
+> **Do NOT enable** Personal Hotspot/Tethering on iPhone!
+
+| Setting | Required State |
+|---------|----------------|
+| Mac: Internet Sharing | ✅ **Enabled** |
+| iPhone: Personal Hotspot | ❌ **Disabled** |
 
 **Setup Steps:**
 
 1. Connect iPhone to Mac via Lightning/USB-C cable
 2. If prompted on iPhone, tap **Trust** to trust the computer
-3. On Mac, go to **System Settings → General → Sharing**
-4. Click **Internet Sharing** (don't enable yet)
-5. Set **"Share your connection from"** to your internet source (e.g., "Wi-Fi")
-6. Check **"iPhone USB"** under "To computers using"
-7. Enable **Internet Sharing** (toggle it on)
+3. **Disable Personal Hotspot** on iPhone (Settings → Personal Hotspot → Off)
+4. On Mac, go to **System Settings → General → Sharing**
+5. Click **Internet Sharing** (don't enable yet)
+6. Set **"Share your connection from"** to your internet source (e.g., "Wi-Fi")
+7. Check **"iPhone USB"** under "To computers using"
+8. Enable **Internet Sharing** (toggle it on)
 
 ### macOS + Android
 
-**On Android phone:**
-1. Connect phone to Mac via USB cable (data-capable, not charge-only)
-2. Go to **Settings → Network & Internet → Hotspot & Tethering**
-3. Enable **USB Tethering**
+> **Use Android USB Tethering** (Android shares its network to Mac via USB).
+> **Do NOT enable** Internet Sharing on Mac!
+
+| Setting | Required State |
+|---------|----------------|
+| Mac: Internet Sharing | ❌ **Disabled** |
+| Android: USB Tethering | ✅ **Enabled** |
+
+**Setup Steps:**
+
+1. **Disable Internet Sharing** on Mac (System Settings → General → Sharing)
+2. Connect phone to Mac via USB cable (data-capable, not charge-only)
+3. Go to **Settings → Network & Internet → Hotspot & Tethering**
+4. Enable **USB Tethering**
 
 ### Ubuntu/Linux + Android
 
@@ -190,19 +209,22 @@ On macOS, this detects interfaces by name (e.g., "Pixel 9a", "iPhone USB") rathe
 
 ### Phone can't discover server
 
-1. **Verify network connection**: Check that USB tethering / Internet Sharing is enabled
+1. **Verify correct setup** (iOS and Android require **opposite** configurations!):
+   - **iOS**: Mac Internet Sharing = ON, iPhone Personal Hotspot = OFF
+   - **Android**: Mac Internet Sharing = OFF, Android USB Tethering = ON
 2. **Check mDNS**: The server should show `mdns_registered` in its output
 3. **Same network**: Ensure phone and Mac are on the same network segment
 
 ### Server starts but no connection
 
 1. **Check firewall**: Ensure UDP port 50000 is not blocked
-2. **Verify tethering**: On Android, USB Tethering must be enabled; on iOS with macOS, Internet Sharing must be enabled
+2. **Verify correct setup**: See above — iOS and Android need opposite settings!
+3. **Trust the computer**: On iOS, ensure you've tapped "Trust" when prompted
 
 ### Connection drops
 
 1. **Cable issue**: Use a data-capable USB cable (not charge-only)
-2. **Tethering disabled**: Check that USB Tethering / Internet Sharing is still enabled
+2. **Settings changed**: Check that the correct tethering/sharing settings are still enabled
 
 ---
 

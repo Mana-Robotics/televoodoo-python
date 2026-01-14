@@ -24,6 +24,24 @@ if TYPE_CHECKING:
 ConnectionType = Literal["auto", "ble", "wifi", "usb"]
 
 
+def _print_usb_setup_info() -> None:
+    """Print USB setup requirements for iOS and Android."""
+    print(json.dumps({
+        "type": "usb_setup_info",
+        "message": "USB connection requires different setup for iOS vs Android",
+        "ios_setup": {
+            "mac_internet_sharing": "ENABLED",
+            "iphone_personal_hotspot": "DISABLED",
+            "note": "Mac shares internet TO iPhone via USB",
+        },
+        "android_setup": {
+            "mac_internet_sharing": "DISABLED",
+            "android_usb_tethering": "ENABLED",
+            "note": "Android shares internet TO Mac via USB",
+        },
+    }), flush=True)
+
+
 def start_televoodoo(
     callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     quiet: bool = False,
@@ -74,6 +92,10 @@ def start_televoodoo(
     resolved_connection = connection
     if resolved_connection == "auto":
         resolved_connection = _detect_best_connection()
+
+    # Print USB setup requirements if USB connection selected
+    if resolved_connection == "usb":
+        _print_usb_setup_info()
 
     # Print session/QR with transport info
     # Phone app uses mDNS to discover: <name>._televoodoo._udp.local.

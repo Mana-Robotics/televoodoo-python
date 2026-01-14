@@ -18,12 +18,18 @@
 
 | Platform | WiFi (default) | USB | BLE |
 |----------|----------------|-----|-----|
-| **macOS** | ✅ Works out of box | ✅ Android: USB Tethering, iOS: Mac Internet Sharing* | PyObjC frameworks (auto-installed) |
+| **macOS** | ✅ Works out of box | ✅ See setup below* | PyObjC frameworks (auto-installed) |
 | **Ubuntu** | ✅ Works out of box | ✅ Android: USB Tethering (iOS needs libimobiledevice) | BlueZ: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
 | **Windows** | ✅ Works out of box | ✅ (may need drivers) | Not supported |
 | **Other** | ✅ Works out of box | Platform dependent | Not supported |
 
-> \* **iOS USB on macOS**: Use **macOS Internet Sharing** (System Settings → Sharing → Internet Sharing, share WiFi to "iPhone USB"), NOT iPhone Personal Hotspot. See [USB_API.md](docs/USB_API.md) for details.
+> \* **USB on macOS** — iOS and Android require **opposite** configurations:
+> | Phone | Mac Setting | Phone Setting |
+> |-------|-------------|---------------|
+> | **iOS** | Internet Sharing = **ON** | Personal Hotspot = **OFF** |
+> | **Android** | Internet Sharing = **OFF** | USB Tethering = **ON** |
+> 
+> See [USB_API.md](docs/USB_API.md) for detailed setup instructions.
 
 
 ### 1. Install
@@ -268,7 +274,11 @@ televoodoo --connection usb    # USB tethering (lowest latency)
 televoodoo --connection ble    # Bluetooth
 ```
 
-> 💡 **USB Connection**: For Android, enable USB Tethering on the phone. For iOS on macOS, enable **macOS Internet Sharing** (share WiFi to "iPhone USB") — NOT iPhone Personal Hotspot. See [USB API docs](docs/USB_API.md) for details.
+> ⚠️ **USB Connection** requires **opposite** setup for iOS vs Android:
+> - **Android**: Enable USB Tethering on phone, **disable** Mac Internet Sharing
+> - **iOS on macOS**: Enable **macOS Internet Sharing** (share WiFi to "iPhone USB"), **disable** iPhone Personal Hotspot
+> 
+> See [USB API docs](docs/USB_API.md) for details.
 
 ## Config Files
 

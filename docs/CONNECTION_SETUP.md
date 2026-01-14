@@ -364,9 +364,13 @@ Everyone on the team can connect their phones using the same credentials.
 
 ### All Platforms (USB)
 - Requires USB cable (data-capable, not charge-only)
-- **Android**: Enable USB Tethering in Settings → Network → Hotspot & Tethering
-- **iOS on macOS**: Use **macOS Internet Sharing** (System Settings → General → Sharing → Internet Sharing), share your WiFi to "iPhone USB" — do NOT use iPhone Personal Hotspot
-- No mDNS required (direct IP connection)
+- ⚠️ **iOS and Android require OPPOSITE configurations!**
+- **iOS on macOS**:
+  - Mac: **Enable** Internet Sharing (System Settings → General → Sharing)
+  - iPhone: **Disable** Personal Hotspot
+- **Android on macOS**:
+  - Mac: **Disable** Internet Sharing
+  - Android: **Enable** USB Tethering (Settings → Network → Hotspot & Tethering)
 - See **USB_API.md** for detailed prerequisites per platform
 
 ### macOS (BLE)
