@@ -107,28 +107,14 @@ def my_callback(evt):
 
 ### JSON Structure
 
-The QR code contains a JSON string with connection credentials and transport info:
+The QR code contains minimal data — the phone app uses **mDNS** to discover the server automatically.
 
-**WiFi (default):**
+**WiFi / USB (mDNS discovery):**
 ```json
 {
   "name": "myvoodoo",
   "code": "ABC123",
-  "transport": "wifi",
-  "ip": "192.168.1.100",
-  "port": 50000
-}
-```
-
-**USB:**
-```json
-{
-  "name": "myvoodoo",
-  "code": "ABC123",
-  "transport": "usb",
-  "ip": "192.168.42.129",
-  "port": 50000,
-  "phone_ip": "192.168.42.1"
+  "transport": "wifi"
 }
 ```
 
@@ -143,9 +129,10 @@ The QR code contains a JSON string with connection credentials and transport inf
 
 ### Field Descriptions
 
-- **name** (string): Server/peripheral name
+- **name** (string): Server/peripheral name — used for mDNS discovery
   - Random mode: `voodoo` + 2-character random suffix (e.g., `voodooX7`)
   - Static mode: Your custom name (e.g., `myvoodoo`)
+  - Phone discovers via: `<name>._televoodoo._udp.local.`
 
 - **code** (string): 6-character authentication code
   - Random mode: Randomly generated alphanumeric code
@@ -154,11 +141,15 @@ The QR code contains a JSON string with connection credentials and transport inf
 
 - **transport** (string): Connection type (`"wifi"`, `"usb"`, or `"ble"`)
 
-- **ip** (string, WiFi/USB only): Server IP address on local/USB network
+### mDNS Discovery
 
-- **port** (number, WiFi/USB only): UDP port (default: 50000)
+For WiFi and USB, the phone app discovers the server via mDNS:
+1. QR code provides the service `name`
+2. Phone queries mDNS for `<name>._televoodoo._udp.local.`
+3. mDNS returns the server's IP address and port
+4. Phone connects to the discovered endpoint
 
-- **phone_ip** (string, USB only): Phone's IP on USB interface (for verification)
+This works regardless of which network interface (WiFi or USB) the phone is connected to.
 
 ### Example QR Code Contents
 
@@ -167,21 +158,16 @@ The QR code contains a JSON string with connection credentials and transport inf
 {
   "name": "voodooK9",
   "code": "X3P7M2",
-  "transport": "wifi",
-  "ip": "192.168.1.50",
-  "port": 50000
+  "transport": "wifi"
 }
 ```
 
-**USB with detected interface:**
+**USB connection:**
 ```json
 {
   "name": "my_robot_arm",
   "code": "ROBOT1",
-  "transport": "usb",
-  "ip": "192.168.42.129",
-  "port": 50000,
-  "phone_ip": "192.168.42.1"
+  "transport": "usb"
 }
 ```
 

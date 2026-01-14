@@ -46,15 +46,22 @@ def print_session_qr(
 ) -> None:
     """Print session info as JSON and display QR code for phone app.
 
+    The QR code contains minimal data for mDNS-based discovery:
+    - name: Service name (app discovers via <name>._televoodoo._udp.local.)
+    - code: Authentication code
+    - transport: Connection type ("ble", "wifi", or "usb")
+
+    For WiFi/USB, the phone app discovers the server via mDNS - no IP needed in QR.
+
     Args:
-        name: Peripheral/server name
+        name: Peripheral/server name (used for mDNS discovery)
         code: Authentication code
         transport: Connection type ("ble", "wifi", or "usb")
-        wifi_port: UDP port for WIFI/USB (required if transport="wifi" or "usb")
-        wifi_ip: IP address for WIFI (auto-detected if not provided)
-        usb_ip: IP address for USB tethering (auto-detected if not provided)
+        wifi_port: UDP port for WIFI/USB (default: 50000, included in mDNS TXT record)
+        wifi_ip: Optional IP address override (for logging only)
+        usb_ip: Deprecated, unused (mDNS handles discovery)
     """
-    # Build session info
+    # Build session info for logging
     session_info = {
         "type": "session",
         "name": name,
@@ -62,42 +69,24 @@ def print_session_qr(
         "transport": transport,
     }
     
-    # Add WIFI-specific fields
-    if transport == "wifi":
+    # Add port for WiFi/USB (for logging; actual discovery via mDNS)
+    if transport in ("wifi", "usb"):
+        session_info["port"] = wifi_port or 50000
+        # Include detected IP for informational purposes
         session_info["ip"] = wifi_ip or _get_local_ip()
-        session_info["port"] = wifi_port or 50000
-    
-    # Add USB-specific fields
-    if transport == "usb":
-        if usb_ip is None:
-            # Auto-detect USB interface IP
-            from .usb import get_usb_ip, get_usb_gateway
-            usb_ip = get_usb_ip()
-        session_info["ip"] = usb_ip or "0.0.0.0"
-        session_info["port"] = wifi_port or 50000
-        # Include phone's IP (gateway) for the app to verify USB connection
-        from .usb import get_usb_gateway
-        gateway = get_usb_gateway()
-        if gateway:
-            session_info["phone_ip"] = gateway
     
     print(json.dumps(session_info), flush=True)
     
     try:
         import qrcode
 
-        # QR code payload includes transport info
-        payload_data = {"name": name, "code": code, "transport": transport}
-        
-        if transport == "wifi":
-            payload_data["ip"] = session_info["ip"]
-            payload_data["port"] = session_info["port"]
-        
-        if transport == "usb":
-            payload_data["ip"] = session_info["ip"]
-            payload_data["port"] = session_info["port"]
-            if "phone_ip" in session_info:
-                payload_data["phone_ip"] = session_info["phone_ip"]
+        # QR code payload - minimal data, mDNS handles discovery
+        # Phone app uses: <name>._televoodoo._udp.local. to find the service
+        payload_data = {
+            "name": name,
+            "code": code,
+            "transport": transport,
+        }
         
         payload = json.dumps(payload_data)
         qr = qrcode.QRCode(border=1)

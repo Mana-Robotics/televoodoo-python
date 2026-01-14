@@ -1,7 +1,11 @@
 """Connection management for Televoodoo.
 
 This module provides the main entry point for starting Televoodoo with
-different connection backends (BLE, WIFI, etc.).
+different connection backends (BLE, WIFI, USB).
+
+WiFi and USB use the same UDP server with mDNS discovery - the phone app
+discovers the service via <name>._televoodoo._udp.local. regardless of
+which network interface (WiFi or USB tethering) is being used.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ import platform
 from typing import Any, Callable, Dict, Literal, Optional, TYPE_CHECKING
 
 from .session import generate_credentials, print_session_qr
-from .wifi import DEFAULT_PORT as WIFI_DEFAULT_PORT
+from .udp_service import DEFAULT_PORT as UDP_DEFAULT_PORT
 
 if TYPE_CHECKING:
     from .config import OutputConfig
@@ -26,7 +30,7 @@ def start_televoodoo(
     name: Optional[str] = None,
     code: Optional[str] = None,
     connection: ConnectionType = "auto",
-    wifi_port: int = WIFI_DEFAULT_PORT,
+    wifi_port: int = UDP_DEFAULT_PORT,
     upsample_to_hz: Optional[float] = None,
     rate_limit_hz: Optional[float] = None,
     regulated: Optional[bool] = None,
@@ -36,6 +40,9 @@ def start_televoodoo(
 
     Generates a session with QR code for the phone app to scan, then starts
     the connection backend and calls the callback for each teleoperation event.
+
+    For WiFi and USB, the server uses mDNS to advertise on all network interfaces.
+    The phone app discovers the service via mDNS - no IP address needed in QR code.
 
     Args:
         callback: Function called for each event (pose, connection status, etc.)
@@ -68,23 +75,13 @@ def start_televoodoo(
     if resolved_connection == "auto":
         resolved_connection = _detect_best_connection()
 
-    # Print session/QR with transport info so phone app knows how to connect
-    # For USB, we use "wifi" transport in QR code for backward compatibility
-    # (the protocol is identical - just UDP to an IP address)
-    qr_transport = "wifi" if resolved_connection == "usb" else resolved_connection
-    
-    # For USB, we must explicitly pass the USB interface IP
-    qr_wifi_ip = None
-    if resolved_connection == "usb":
-        from . import usb
-        qr_wifi_ip = usb.get_usb_ip()
-    
+    # Print session/QR with transport info
+    # Phone app uses mDNS to discover: <name>._televoodoo._udp.local.
     print_session_qr(
         name=name,
         code=code,
-        transport=qr_transport,
+        transport=resolved_connection,
         wifi_port=wifi_port if resolved_connection in ("wifi", "usb") else None,
-        wifi_ip=qr_wifi_ip,  # Pass USB IP when using USB
     )
 
     # Resolve resampling settings from config if not provided directly
@@ -132,10 +129,10 @@ def start_televoodoo(
     try:
         if resolved_connection == "ble":
             _start_ble(name, code, effective_callback, quiet)
-        elif resolved_connection == "wifi":
-            _start_wifi(name, code, effective_callback, quiet, wifi_port)
-        elif resolved_connection == "usb":
-            _start_usb(name, code, effective_callback, quiet, wifi_port)
+        elif resolved_connection in ("wifi", "usb"):
+            # WiFi and USB use the same UDP server - mDNS advertises on all interfaces
+            # The phone discovers via mDNS regardless of which interface it's on
+            _start_udp_server(name, code, effective_callback, quiet, wifi_port)
         else:
             raise RuntimeError(f"Unknown connection type: {resolved_connection}")
     except Exception as e:
@@ -174,27 +171,20 @@ def _start_ble(
     ble.run_peripheral(name, code, callback, quiet)
 
 
-def _start_wifi(
+def _start_udp_server(
     name: str,
     code: str,
     callback: Optional[Callable[[Dict[str, Any]], None]],
     quiet: bool,
     port: int,
 ) -> None:
-    """Start WIFI server backend."""
-    from . import wifi
+    """Start UDP server backend.
+    
+    This server works for both WiFi and USB connections:
+    - Binds to 0.0.0.0 (all interfaces)
+    - Advertises via mDNS on all interfaces
+    - Phone discovers via mDNS regardless of connection type
+    """
+    from . import udp_service
 
-    wifi.run_server(name, code, callback, quiet, port)
-
-
-def _start_usb(
-    name: str,
-    code: str,
-    callback: Optional[Callable[[Dict[str, Any]], None]],
-    quiet: bool,
-    port: int,
-) -> None:
-    """Start USB tethering server backend."""
-    from . import usb
-
-    usb.run_server(name, code, callback, quiet, port)
+    udp_service.run_server(name, code, callback, quiet, port)

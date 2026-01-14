@@ -2,7 +2,7 @@
 
 Main exports:
 - start_televoodoo: Start the connection and receive pose data
-- send_haptic: Send haptic feedback to the iOS app
+- send_haptic: Send haptic feedback to the phone app
 - PoseProvider: Get transformed poses from teleoperation events
 - Pose: Pose data structure
 - load_config: Load configuration from JSON file
@@ -15,7 +15,7 @@ from .pose_provider import PoseProvider
 from .resampler import PoseResampler
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
-from .wifi import send_haptic
+from .udp_service import send_haptic
 from . import math
 from . import protocol
 

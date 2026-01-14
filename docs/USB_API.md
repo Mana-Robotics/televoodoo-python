@@ -2,13 +2,26 @@
 
 ## Overview
 
-USB connection provides a wired alternative to WiFi and BLE for connecting the Televoodoo App to your Python application. A USB connection creates a virtual network interface between your phone and computer, offering:
+USB connection provides a wired alternative to WiFi and BLE for connecting the Televoodoo App to your Python application. USB creates a virtual network interface between your phone and computer, offering:
 
 - **Lower latency**: ~5-10ms (vs ~16ms WiFi)
 - **Higher reliability**: Wired connection, no wireless interference
-- **No network dependency**: Works without WiFi access
+- **No WiFi network required**: Works without WiFi access
 
-USB uses the same UDP protocol as WiFi internally, so all features (poses, commands, haptic feedback) work identically.
+## How It Works
+
+USB and WiFi use the **same server implementation**:
+
+1. **Server binds to `0.0.0.0:50000`** — listens on ALL network interfaces
+2. **mDNS advertises on ALL interfaces** — phone discovers via `<name>._televoodoo._udp.local.`
+3. **Phone discovers via mDNS** — regardless of connection type (WiFi or USB)
+
+The QR code only contains:
+- `name`: Service name for mDNS discovery
+- `code`: Authentication code  
+- `transport`: Connection type (`"usb"`)
+
+No IP address is needed — mDNS handles discovery automatically.
 
 ## When to Use USB
 
@@ -24,9 +37,9 @@ USB uses the same UDP protocol as WiFi internally, so all features (poses, comma
 
 ## Prerequisites
 
-### macOS + iOS (Recommended Setup)
+### macOS + iOS
 
-> ⚠️ **Important**: For iOS, use **macOS Internet Sharing** (Mac shares its network to iPhone), NOT iPhone Personal Hotspot/Tethering.
+> **Use macOS Internet Sharing** (Mac shares its network to iPhone via USB).
 
 **Setup Steps:**
 
@@ -37,59 +50,37 @@ USB uses the same UDP protocol as WiFi internally, so all features (poses, comma
 5. Set **"Share your connection from"** to your internet source (e.g., "Wi-Fi")
 6. Check **"iPhone USB"** under "To computers using"
 7. Enable **Internet Sharing** (toggle it on)
-8. Confirm when prompted
-
-The Mac will create a network bridge (`192.168.2.x`) and the iPhone will receive an IP via DHCP.
 
 ### macOS + Android
 
 **On Android phone:**
-1. Connect phone to Mac via USB cable (must be data-capable, not charge-only)
+1. Connect phone to Mac via USB cable (data-capable, not charge-only)
 2. Go to **Settings → Network & Internet → Hotspot & Tethering**
 3. Enable **USB Tethering**
-4. Wait for Mac to detect the network interface (~5 seconds)
 
 ### Ubuntu/Linux + Android
 
 1. Connect Android phone via USB cable
 2. Enable **USB Tethering** on phone (Settings → Hotspot & Tethering)
-3. Some devices may need `usb-modeswitch`:
-   ```bash
-   sudo apt install usb-modeswitch
-   ```
 
 ### Ubuntu/Linux + iOS
 
-⚠️ Requires additional packages and may have limited support:
+⚠️ Requires additional packages:
 ```bash
 sudo apt install libimobiledevice6 usbmuxd
 sudo systemctl start usbmuxd
 ```
-
-### Windows + Android
-
-1. Connect Android phone via USB cable
-2. Enable **USB Tethering** on phone
-3. May need USB drivers (OEM-specific or generic RNDIS)
-4. Most modern phones work with Windows 10/11 built-in drivers
-
-### Windows + iOS
-
-⚠️ Requires iTunes or Apple Mobile Device Support installed. Setup similar to macOS Internet Sharing approach.
 
 ---
 
 ## CLI Usage
 
 ```bash
-# USB connection with random credentials
+# USB connection
 televoodoo --connection usb
 
-# USB connection with static credentials
+# USB with static credentials
 televoodoo --connection usb --name myrobot --code ABC123
-
-# USB with custom port
-televoodoo --connection usb --wifi-port 51000
 ```
 
 ---
@@ -103,7 +94,7 @@ def on_event(evt):
     if evt.get("type") == "pose":
         print(f"Pose: {evt['data']}")
 
-# USB connection with random credentials
+# USB connection
 start_televoodoo(callback=on_event, connection="usb")
 
 # USB with static credentials
@@ -117,152 +108,101 @@ start_televoodoo(
 
 ---
 
-## USB Interface Detection
-
-Televoodoo automatically detects USB network interfaces by looking for IP addresses in known ranges:
-
-| Setup | Typical IP Range | Notes |
-|-------|------------------|-------|
-| macOS Internet Sharing (iOS) | `192.168.2.x` | Mac at `.1`, iPhone gets DHCP |
-| Android USB Tethering | `192.168.42.x` | Phone at `.1` |
-| Android (variant) | `192.168.44.x` | Phone at `.1` |
-| iOS Personal Hotspot | `172.20.10.x` | May not work reliably on macOS |
-
-### Checking USB Availability
-
-```python
-from televoodoo.usb import is_usb_available, get_usb_info
-
-# Check if USB tethering is active
-if is_usb_available():
-    info = get_usb_info()
-    print(f"USB connected via {info['interface']}")
-    print(f"Local IP: {info['local_ip']}")
-    print(f"Phone IP: {info['phone_ip']}")
-    print(f"Platform: {info['platform']}")  # 'android' or 'ios'
-else:
-    print("No USB tethering detected")
-```
-
----
-
 ## QR Code Format
 
-The USB transport uses a QR code format similar to WiFi:
+The QR code uses a minimal format with mDNS discovery:
 
 ```json
 {
   "name": "myrobot",
   "code": "ABC123",
-  "transport": "usb",
-  "ip": "192.168.42.129",
-  "port": 50000,
-  "phone_ip": "192.168.42.1"
+  "transport": "usb"
 }
 ```
 
-The `phone_ip` field helps the app verify it's connected via the correct interface.
+The phone app uses the `name` to discover the service via mDNS:
+- Service: `myrobot._televoodoo._udp.local.`
 
----
-
-## Event Format
-
-USB events use the same format as WiFi, with `usb_` prefix:
-
-```python
-# Connection established
-{"type": "usb_connected", "client": "192.168.42.1:51234"}
-
-# Pose data
-{"type": "pose", "data": {"absolute_input": {...}}}
-
-# Disconnection
-{"type": "usb_disconnected", "reason": "timeout"}  # or "bye"
-```
+No IP address is included — mDNS handles discovery on whatever network interface the phone is connected to.
 
 ---
 
 ## Technical Details
 
-### How USB Networking Works
+### Unified Server Architecture
 
-**macOS Internet Sharing (recommended for iOS):**
-1. Mac creates a bridge network interface (`bridge100`)
-2. Mac acts as router/DHCP server at `192.168.2.1`
-3. iPhone receives an IP via DHCP (e.g., `192.168.2.x`)
-4. Standard TCP/UDP networking works over this interface
+WiFi and USB use the same server:
 
-**Android USB Tethering:**
-1. Phone creates a virtual network interface over USB
-2. Computer sees a new network interface (e.g., `en5` on macOS, `usb0` on Linux)
-3. Phone runs a DHCP server, assigning an IP to the computer
-4. Standard TCP/UDP networking works over this interface
+```
+┌─────────────────────────────────────────────┐
+│  UDP Server (binds to 0.0.0.0:50000)        │
+│  - Receives packets from any interface      │
+│  - mDNS advertises on all interfaces        │
+└─────────────────────────────────────────────┘
+         │                    │
+         ▼                    ▼
+   ┌──────────┐        ┌──────────────┐
+   │  WiFi    │        │  USB Network │
+   │ Interface│        │  Interface   │
+   └──────────┘        └──────────────┘
+```
 
-### Differences from WiFi
+### mDNS Discovery
 
-| Aspect | WiFi | USB |
-|--------|------|-----|
-| Discovery | mDNS on LAN | Direct IP (interface detection) |
-| Latency | ~16ms | ~5-10ms |
-| Reliability | Depends on WiFi | Very stable |
-| Setup | Same network required | Cable + Internet Sharing/Tethering |
-| mDNS | Enabled | Disabled (not needed) |
+The server advertises via mDNS (Bonjour/Zeroconf):
+- **Service type**: `_televoodoo._udp.local.`
+- **Instance name**: `<name> @ <hostname>._televoodoo._udp.local.`
+- **TXT records**: `v=1`, `port=50000`, `name=<name>`
 
-### Why No mDNS for USB?
+The phone app discovers the service on whatever network it's connected to (WiFi LAN or USB tethering network).
 
-USB creates a point-to-point network between phone and computer. The IP addresses are predictable based on the setup method, so mDNS discovery is unnecessary. This also simplifies the connection flow.
+### Why This Works
+
+Both WiFi and USB tethering create network interfaces:
+- WiFi: Phone and Mac on same LAN
+- USB: Phone and Mac on same point-to-point network
+
+In both cases, mDNS works because the devices are on the same network segment. The server doesn't need to know which interface to use — it listens on all of them.
+
+---
+
+## Detecting USB Interfaces
+
+For diagnostics, you can check what USB interfaces are detected:
+
+```python
+from televoodoo.usb import detect_usb_interfaces, is_usb_available
+
+# Check if USB is available
+if is_usb_available():
+    interfaces = detect_usb_interfaces()
+    for iface in interfaces:
+        print(f"Found: {iface.name} ({iface.device})")
+else:
+    print("No USB network interface detected")
+```
+
+On macOS, this detects interfaces by name (e.g., "Pixel 9a", "iPhone USB") rather than IP ranges.
 
 ---
 
 ## Troubleshooting
 
-### "No USB tethering interface detected"
+### Phone can't discover server
 
-1. **For iOS on macOS**: Verify **Internet Sharing** is enabled in System Settings → General → Sharing
-2. **For Android**: Verify **USB Tethering** is enabled on the phone
-3. **Check the cable** - use a data-capable USB cable (not charge-only)
-4. **Wait a few seconds** after enabling for the interface to appear
-5. **Check System Settings → Network** (macOS) or Network Manager (Linux) for new interfaces
+1. **Verify network connection**: Check that USB tethering / Internet Sharing is enabled
+2. **Check mDNS**: The server should show `mdns_registered` in its output
+3. **Same network**: Ensure phone and Mac are on the same network segment
 
-### macOS + iOS: No network interface appears
+### Server starts but no connection
 
-1. Make sure **Internet Sharing** is configured correctly:
-   - Share from: Wi-Fi (or your internet source)
-   - To computers using: iPhone USB (must be checked)
-2. Toggle Internet Sharing off and on again
-3. Disconnect and reconnect the iPhone
-4. Check that iPhone shows "Trust This Computer" and tap Trust
+1. **Check firewall**: Ensure UDP port 50000 is not blocked
+2. **Verify tethering**: On Android, USB Tethering must be enabled; on iOS with macOS, Internet Sharing must be enabled
 
-### Connection times out
+### Connection drops
 
-1. **Verify the phone app** is connecting to the correct IP (shown in QR code)
-2. **For iOS**: The QR code should show `192.168.2.1` (Mac's bridge IP)
-3. **Check firewall** - ensure UDP port 50000 is not blocked
-4. **Try a different port**: `--wifi-port 51000`
-
-### iOS: "Trust This Computer" not appearing
-
-1. Disconnect and reconnect the USB cable
-2. Unlock the iPhone before connecting
-3. On Mac, check System Information → USB to verify the phone is recognized
-
-### Linux: USB interface not appearing for iOS
-
-Install the required packages:
-```bash
-sudo apt install libimobiledevice6 usbmuxd
-sudo systemctl enable usbmuxd
-sudo systemctl start usbmuxd
-```
-
-Reconnect the iPhone after installing.
-
-### Android: USB Tethering option grayed out
-
-1. Enable **Developer Options** on your phone
-2. Enable **USB Debugging** in Developer Options
-3. Reconnect the USB cable
-4. Select "USB Tethering" mode when connecting
+1. **Cable issue**: Use a data-capable USB cable (not charge-only)
+2. **Tethering disabled**: Check that USB Tethering / Internet Sharing is still enabled
 
 ---
 
@@ -271,4 +211,3 @@ Reconnect the iPhone after installing.
 - **WIFI_API.md**: WiFi/UDP protocol details (shared with USB)
 - **BLE_API.md**: Bluetooth Low Energy connection
 - **CONNECTION_SETUP.md**: General connection guide
-- **HAPTIC_FEEDBACK_API.md**: Haptic feedback works with USB
