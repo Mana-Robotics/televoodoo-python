@@ -67,6 +67,17 @@ The Televoodoo App sends pose data using a binary protocol (see `WIFI_API.md` an
 
 > **Note**: Quaternions are the preferred representation for 3D rotations as they avoid gimbal lock and interpolate smoothly. Euler angles are NOT sent in the protocol — use `PoseProvider` if you need them computed from the quaternion.
 
+## Output Formats Explained
+
+Televoodoo-python events can include multiple pose “formats” (raw input pose data from phone, deltas, and transformed variants). Which ones are emitted is controlled by your config’s `includeFormats` section (see [Config File](../README.md#config-file) in the main README).
+
+| Format | Description |
+|--------|-------------|
+| `absolute_input` | Raw pose from phone (in marker frame) |
+| `delta_input` | Change since first pose (in marker frame) |
+| `absolute_transformed` | Pose transformed to target frame |
+| `delta_transformed` | Delta transformed to target frame — **best for robot control** |
+
 ## Example Payloads
 
 ### New Movement Start (Origin Reset)

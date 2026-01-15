@@ -2,7 +2,7 @@
   <img src="assets/Televoodoo-Python-Banner.png" alt="Televoodoo Viewer screenshot" />
 </p>
 
-**Televoodoo Python** enables your Python project to receive real-time **6DoF** pose data from any smartphone running the Televoodoo App — perfect for **Robot Teleoperation**, **3D object manipulation**, **VR motion control**, and more.
+**Televoodoo Python** enables your Python project to receive real-time **6DoF** pose data from your smartphone (iOS/Android) running the Televoodoo App — perfect for **Robot Teleoperation**, **3D object manipulation**, **VR motion control**, and more.
 
 ### The Televoodoo Ecosystem
 
@@ -10,27 +10,42 @@
 - **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via WiFi, USB, or BLE
 - **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
+## Why Televoodoo?
 
+Traditional 6DoF controllers either limit the motions you can generate (e.g., a 3D mouse) or require expensive hardware (e.g., VR controllers). Meanwhile, we all carry a capable 6DoF controller in our pocket—our phone. Let’s make use of that.
+
+**Televoodoo is optimized for 3 main goals:**
+
+#### 🕹️ Teleoperator UX
+
+- Automatic pairing (app ↔ PC) to current setup via QR code scan
+- Fast, reproducible world-frame alignment with an ArUco marker
+- Tap-and-hold for deliberate control; release to stop instantly
+- Receive **haptic feedback** driven by configurable signals (e.g., force/torque sensors)
+- Control recording of motion demonstrations (training data) directly from the phone app.
+
+#### ⚡ Teleoperation quality
+
+- Stable pose and motion tracking (quaternion-based for safety)
+- Ultra-low-latency streaming for responsive real-time control
+- Optional upsampling and rate limiting to any target frequency
+
+#### 🔌 Effortless integration
+
+- Open-source **Python** client library
+- Flexible connectivity via WiFi, USB, or BLE
+- Working examples to get you started
+
+
+## Platform Notes
+
+| Platform | WiFi | USB | BLE |
+|----------|----------------|-----|-----|
+| **macOS** | ✅ Works out of box | ✅ Configure according to [USB_API](docs/USB_API.md) | ✅ Dependencies are auto-installed |
+| **Ubuntu** | ✅ Works out of box | ✅ Configure according to [USB_API](docs/USB_API.md) | ✅ Install `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
+| **Windows** | ✅ Works out of box | ☑️ Not yet tested | ❌ Not supported |
 
 ## Quick Start
-
-### Platform Notes
-
-| Platform | WiFi (default) | USB | BLE |
-|----------|----------------|-----|-----|
-| **macOS** | ✅ Works out of box | ✅ See setup below* | PyObjC frameworks (auto-installed) |
-| **Ubuntu** | ✅ Works out of box | ✅ Android: USB Tethering (iOS needs libimobiledevice) | BlueZ: `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
-| **Windows** | ✅ Works out of box | ✅ (may need drivers) | Not supported |
-| **Other** | ✅ Works out of box | Platform dependent | Not supported |
-
-> \* **USB on macOS** — iOS and Android require **opposite** configurations:
-> | Phone | Mac Setting | Phone Setting |
-> |-------|-------------|---------------|
-> | **iOS** | Internet Sharing = **ON** | Personal Hotspot = **OFF** |
-> | **Android** | Internet Sharing = **OFF** | USB Tethering = **ON** |
-> 
-> See [USB_API.md](docs/USB_API.md) for detailed setup instructions.
-
 
 ### 1. Install
 
@@ -59,10 +74,13 @@ pip install -e .
 **With CLI**
 
 ```bash
-# Start with random credentials (QR code will be displayed)
+# Basic start -> using Wifi, random credentials
 televoodoo
 
-# Start with static credentials
+# Set connection type (wifi / usb / ble)
+televoodoo --connection wifi
+
+# Set static credentials -> You only need to scan it with app once
 televoodoo --name myrobot --code ABC123
 ```
 
@@ -90,11 +108,12 @@ def my_pose_handler(evt):
 start_televoodoo(callback=my_pose_handler)
 ```
 
-### 3. Connect with Televoodoo app (iOS, Android)
+### 3. Connect the Televoodoo App (iOS, Android)
 
-1. A QR code appears in your terminal
-2. Use **Televoodoo App** to scan the QR code and the [ArUco marker](#coordinate-system-setup) (reference frame), then follow further on-screen instructions
-5. Callback receives real-time 6DoF poses
+1. **Connect the Televoodoo App** to your **televoodoo-python** instance by scanning the QR code displayed in the terminal.
+2. **Align the Coordinate frame** with your **physical setup** by scanning the [ArUco marker](#coordinate-system-setup) (reference frame) attached to the setup ([see details](#coordinate-system-setup)).
+3. Start teleoperating using the **Televoodoo App** and receive real-time **6DoF pose data**.
+
 
 
 
@@ -105,7 +124,7 @@ start_televoodoo(callback=my_pose_handler)
 
 1. **Print the [ArUco marker](assets/televoodoo-aruco-marker.pdf)** (100% scale, no fit-to-page)
 2. **Attach it** to your setup (e.g., somewhere statically linked to world/robot base) — this defines your reference frame
-3. **Configure the transform** between marker and your world/robot frame with a config file. e.g. using [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)
+3. **Configure the transform** between marker and your world/robot frame with a [config file](#config-file). e.g. using [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)
 
 > 💡 **Tip for robot teleoperation:** The position offset between marker and robot base doesn't matter — only the **axis orientation** of the reference frame relative to the robot base is crucial for correct motion mapping.
 
@@ -113,174 +132,24 @@ start_televoodoo(callback=my_pose_handler)
 
 Complete examples can be found in `examples/`:
 
-| Example | Description |
-|---------|-------------|
-| `print_delta_poses/` | Print pose deltas — ideal for robot teleoperation |
-| `print_poses/` | Print absolute poses |
-| `poll_poses/` | Poll latest pose at a fixed rate |
-| `measure_frequency/` | Measure pose input frequency |
-| `record_poses/` | Record poses to a JSON file |
-| `haptic_feedback/` | Send haptic feedback with simulated sensor values |
-| `data_upsampling/` | High-frequency robot control with upsampled poses (200 Hz) |
-| `data_rate_limiting/` | Rate-limited pose output (cap frequency) |
+| Example | Description | README |
+|---------|-------------|--------|
+| [`print_delta_poses/`](examples/print_delta_poses/) | Print pose deltas — ideal for robot teleoperation | [README](examples/print_delta_poses/README.md) |
+| [`print_poses/`](examples/print_poses/) | Print absolute poses | [README](examples/print_poses/README.md) |
+| [`poll_poses/`](examples/poll_poses/) | Poll latest pose at a fixed rate | [README](examples/poll_poses/README.md) |
+| [`measure_frequency/`](examples/measure_frequency/) | Measure pose input frequency | [README](examples/measure_frequency/README.md) |
+| [`record_poses/`](examples/record_poses/) | Record poses to a JSON file | [README](examples/record_poses/README.md) |
+| [`haptic_feedback/`](examples/haptic_feedback/) | Send haptic feedback with simulated sensor values | [README](examples/haptic_feedback/README.md) |
+| [`data_upsampling/`](examples/data_upsampling/) | High-frequency robot control with upsampled poses (200 Hz) | [README](examples/data_upsampling/README.md) |
+| [`data_rate_limiting/`](examples/data_rate_limiting/) | Rate-limited pose output (cap frequency) | [README](examples/data_rate_limiting/README.md) |
+| [`teleop_xarm/`](examples/teleop_xarm/) | Teleoperate a UFACTORY xArm (end-effector pose control) | [README](examples/teleop_xarm/README.md) |
 
 
 
 ## Usage
+Moved to docs: **[Usage](docs/USAGE.md)**.
 
-
-
-
-### Option A: Using Pose Detltas
-
-> ✅ **Recommended for Robot Teleoperation!** Deltas always start at 0 when tracking begins. Pause tracking, reposition yourself, then resume — no jumps in robot motion.
-
-
-Use `PoseProvider.get_delta()` to get transformed deltas directly from events:
-
-```python
-from televoodoo import start_televoodoo, PoseProvider, load_config
-
-# Load config (optional - uses defaults if None)
-config = load_config("my_robot_config.json")
-pose_provider = PoseProvider(config)
-
-def my_handler(evt):
-    # Get delta directly from event
-    delta = pose_provider.get_delta(evt)
-    if delta is None:
-        return  # Not a pose event or no origin set yet
-    
-    # Access delta data for robot control
-    print(f"Position delta: dx={delta['dx']:.3f} dy={delta['dy']:.3f} dz={delta['dz']:.3f}")
-    print(f"Rotation delta (rad): rx={delta['rx']:.3f} ry={delta['ry']:.3f} rz={delta['rz']:.3f}")
-    print(f"Rotation delta (quaternion): ({delta['dqx']:.3f}, {delta['dqy']:.3f}, {delta['dqz']:.3f}, {delta['dqw']:.3f})")
-    
-    # Send delta to robot
-    # robot.move_relative(delta['dx'], delta['dy'], delta['dz'])
-
-start_televoodoo(callback=my_handler)
-```
-
-The delta is calculated relative to the pose where `movement_start=True`, making it perfect for robot teleoperation where you want relative movements.
-
-### Option B: Using Absolute Poses
-
-> ⚠️ **Not recommended for robot teleoperation.** Absolute poses are non-zero from the start and will jump when tracking is paused and resumed.
-
-Use `PoseProvider.get_absolute()` to get transformed absolute poses:
-
-```python
-from televoodoo import start_televoodoo, PoseProvider, load_config
-
-# Load config (optional - uses defaults if None)
-config = load_config("my_robot_config.json")
-pose_provider = PoseProvider(config)
-
-def my_handler(evt):
-    # Get absolute pose from event
-    pose = pose_provider.get_absolute(evt)
-    if pose is None:
-        return  # Not a pose event
-    
-    # Access pose data
-    print(f"Position: x={pose['x']:.3f} y={pose['y']:.3f} z={pose['z']:.3f}")
-    print(f"Quaternion: ({pose['qx']:.3f}, {pose['qy']:.3f}, {pose['qz']:.3f}, {pose['qw']:.3f})")
-
-start_televoodoo(callback=my_handler)
-```
-
-### Pose Format
-
-`PoseProvider.get_absolute()` returns a transformed pose:
-
-```python
-{
-    "movement_start": True,  # New movement origin (for delta calculation)
-    "x": 0.15,               # Position in meters (transformed)
-    "y": 0.20,
-    "z": -0.10,
-    "qx": 0.01234,           # Quaternion (preferred for 3D math)
-    "qy": -0.56789,
-    "qz": 0.12345,
-    "qw": 0.81234,
-    "rx": 0.26,              # Rotation vector (radians) — always included
-    "ry": -0.52,
-    "rz": 0.09
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `movement_start` | bool | `True` = new origin for delta calculation (see below) |
-| `x`, `y`, `z` | float | Position relative to ArUco marker (meters) |
-| `qx`, `qy`, `qz`, `qw` | float | Quaternion — use this for robust 3D calculations |
-| `rx`, `ry`, `rz` | float | Rotation vector (radians) — axis-angle representation |
-
-> **Understanding `movement_start`**: When `true`, this pose becomes the new origin for calculating deltas. This allows you to reposition the phone/controller while not actively controlling, then start a new movement from a different physical position — the robot end effector stays in place and only applies relative deltas from the new origin.
-
-### Authentication Credentials
-
-Televoodoo provides 2 options for connection credentials:
-- **Random** (default): New credentials each launch — good for quick testing  
-- **Static**: Same credentials every time — good for ongoing projects, development, RL demonstration
-
-
-**Random Credentials**
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--name` | Peripheral/server name | Random `voodooXX` |
-| `--code` | 6-character auth code | Random alphanumeric |
-
-
-**Static Credentials**
-
-Option 1: Set via CLI flag
-```bash
-televoodoo --name myrobot --code ABC123
-```
-
-Option 2: Set in code
-```python
-from televoodoo import start_televoodoo
-
-start_televoodoo(callback=handle_pose, name="myrobot", code="ABC123")
-```
-
-Option 3: Set within [config file](#config-files)
-
-### Connection Types
-
-You can specify the connection backend:
-
-```python
-start_televoodoo(
-    callback=handle_pose,
-    connection="auto"  # Options: "auto" (default), "wifi", "usb", "ble"
-)
-```
-
-- **`"auto"`** (default): Uses WiFi — recommended for best latency and cross-platform compatibility
-- **`"wifi"`**: UDP-based connection over local network (~60Hz consistent frequency / ~16ms latency)
-- **`"usb"`**: USB tethering connection (~60Hz / ~5-10ms latency) — lowest latency, requires USB cable
-- **`"ble"`**: Bluetooth Low Energy connection (platform-specific, subject to connection interval batching (e.g. iOS), resulting in effectively only ~30 Hz of update frequency / 32ms latency)
-
-Or via CLI:
-
-```bash
-televoodoo --connection wifi   # WiFi (default)
-televoodoo --connection usb    # USB tethering (lowest latency)
-televoodoo --connection ble    # Bluetooth
-```
-
-> ⚠️ **USB Connection** requires **opposite** setup for iOS vs Android:
-> - **Android**: Enable USB Tethering on phone, **disable** Mac Internet Sharing
-> - **iOS on macOS**: Enable **macOS Internet Sharing** (share WiFi to "iPhone USB"), **disable** iPhone Personal Hotspot
-> 
-> See [USB API docs](docs/USB_API.md) for details.
-
-## Config Files
+## Config File
 
 Config files define how poses are transformed from the ArUco marker frame to your target coordinate system (robot base, world frame, etc.), what output formats to include, and optionally BLE credentials.
 
@@ -343,12 +212,9 @@ Config files define how poses are transformed from the ArUco marker frame to you
 
 ### Creating Config Files
 
-**Option 1: Use [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** (recommended)
-- Visually configure transforms with real-time 3D preview
-- Export as JSON config file
+You can create config files manually according to the examples or by configuring, testing and exporting them with Televoodoo Viewer.
 
-**Option 2: Create manually**
-- Copy the template above and adjust values
+
 
 ### Loading Config Files
 
@@ -374,12 +240,7 @@ start_televoodoo(
 
 ## Output Formats Explained
 
-| Format | Description |
-|--------|-------------|
-| `absolute_input` | Raw pose from phone (in marker frame) |
-| `delta_input` | Change since first pose (in marker frame) |
-| `absolute_transformed` | Pose transformed to target frame |
-| `delta_transformed` | Delta transformed to target frame — **best for robot control** |
+Moved to docs: **[Pose Data Format → Output formats](docs/POSE_DATA_FORMAT.md#output-formats-explained)**.
 
 
 ## Advanced Topics
@@ -503,6 +364,7 @@ start_televoodoo(callback=handle_pose, quiet=True)
 
 For in-depth technical details, see `docs/`:
 
+- **[Usage](docs/USAGE.md)** — Deltas vs absolute, credentials, connection types
 - **[Pose Data Format](docs/POSE_DATA_FORMAT.md)** — Coordinate systems, field descriptions, validation
 - **[Connection Setup](docs/CONNECTION_SETUP.md)** — QR codes, credentials, multi-device setup
 - **[WiFi API](docs/WIFI_API.md)** — UDP protocol, mDNS discovery (default connection)
