@@ -7,7 +7,7 @@ name = "televoodoo"
 version = "0.1.0"
 description = "Use your phone as a 6DoF controller with the Televoodoo app (iOS/Android)."
 readme = "README.md"
-license = "MIT"
+license = "Apache-2.0"
 requires-python = ">=3.8"
 dependencies = [
   "qrcode",

@@ -1,8 +1,10 @@
 # USB Connection API
 
-## Overview
+USB connection provides a wired alternative to WiFi and BLE for connecting the Televoodoo App to your Python application. USB creates a virtual network interface between your phone and computer.
 
-USB connection provides a wired alternative to WiFi and BLE for connecting the Televoodoo App to your Python application. USB creates a virtual network interface between your phone and computer, offering:
+> This is a transport-specific document. For general connection information, see [Connection & Authentication](CONNECTION_AUTHENTICATION.md).
+
+## Advantages
 
 - **Lower latency**: ~5-10ms (vs ~16ms WiFi)
 - **Higher reliability**: Wired connection, no wireless interference
@@ -230,6 +232,6 @@ On macOS, this detects interfaces by name (e.g., "Pixel 9a", "iPhone USB") rathe
 
 ## See Also
 
-- **WIFI_API.md**: WiFi/UDP protocol details (shared with USB)
-- **BLE_API.md**: Bluetooth Low Energy connection
-- **CONNECTION_SETUP.md**: General connection guide
+- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — General connection setup
+- **[WiFi API](WIFI_API.md)** — WiFi/UDP protocol details (shared with USB)
+- **[BLE API](BLE_API.md)** — Bluetooth Low Energy connection

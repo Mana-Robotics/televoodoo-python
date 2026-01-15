@@ -12,7 +12,7 @@
 
 ## Why Televoodoo?
 
-Traditional 6DoF controllers either limit the motions you can generate (e.g., a 3D mouse) or require expensive hardware (e.g., VR controllers). Meanwhile, we all carry a capable 6DoF controller in our pocket—our phone. Let’s make use of that.
+Traditional 6DoF controllers either limit the motions you can generate (e.g., a 3D mouse) or require expensive hardware (e.g., VR controllers). Meanwhile, we all carry a capable 6DoF controller in our pocket—our phone. Let's make use of that.
 
 **Televoodoo is optimized for 3 main goals:**
 
@@ -41,8 +41,8 @@ Traditional 6DoF controllers either limit the motions you can generate (e.g., a 
 
 | Platform | WiFi | USB | BLE |
 |----------|----------------|-----|-----|
-| **macOS** | ✅ Works out of box | ✅ Configure according to [USB_API](docs/USB_API.md) | ✅ Dependencies are auto-installed |
-| **Ubuntu** | ✅ Works out of box | ✅ Configure according to [USB_API](docs/USB_API.md) | ✅ Install `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
+| **macOS** | ✅ Works out of box | ✅ Configure according to [USB API](docs/USB_API.md) | ✅ Dependencies are auto-installed |
+| **Ubuntu** | ✅ Works out of box | ✅ Configure according to [USB API](docs/USB_API.md) | ✅ Install `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
 | **Windows** | ✅ Works out of box | ☑️ Not yet tested | ❌ Not supported |
 
 ## Quick Start
@@ -111,11 +111,8 @@ start_televoodoo(callback=my_pose_handler)
 ### 3. Connect the Televoodoo App (iOS, Android)
 
 1. **Connect the Televoodoo App** to your **televoodoo-python** instance by scanning the QR code displayed in the terminal.
-2. **Align the Coordinate frame** with your **physical setup** by scanning the [ArUco marker](#coordinate-system-setup) (reference frame) attached to the setup ([see details](#coordinate-system-setup)).
+2. **Align the Coordinate frame** with your **physical setup** by scanning the [ArUco marker](assets/televoodoo-aruco-marker.pdf) (reference frame) attached to the setup.
 3. Start teleoperating using the **Televoodoo App** and receive real-time **6DoF pose data**.
-
-
-
 
 
 ## Physical Setup
@@ -124,9 +121,10 @@ start_televoodoo(callback=my_pose_handler)
 
 1. **Print the [ArUco marker](assets/televoodoo-aruco-marker.pdf)** (100% scale, no fit-to-page)
 2. **Attach it** to your setup (e.g., somewhere statically linked to world/robot base) — this defines your reference frame
-3. **Configure the transform** between marker and your world/robot frame with a [config file](#config-file). e.g. using [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)
+3. **Configure the transform** between marker and your world/robot frame with a [config file](docs/CONFIGURATION.md), e.g. using [Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)
 
 > 💡 **Tip for robot teleoperation:** The position offset between marker and robot base doesn't matter — only the **axis orientation** of the reference frame relative to the robot base is crucial for correct motion mapping.
+
 
 ## Examples
 
@@ -145,231 +143,25 @@ Complete examples can be found in `examples/`:
 | [`teleop_xarm/`](examples/teleop_xarm/) | Teleoperate a UFACTORY xArm (end-effector pose control) | [README](examples/teleop_xarm/README.md) |
 
 
-
-## Usage
-Moved to docs: **[Usage](docs/USAGE.md)**.
-
-## Config File
-
-Config files define how poses are transformed from the ArUco marker frame to your target coordinate system (robot base, world frame, etc.), what output formats to include, and optionally BLE credentials.
-
-### File Format & Location
-
-- **Format**: JSON (`.json` extension recommended)
-- **Default search paths** (in order):
-  1. Current working directory
-  2. Directory of your Python script
-  3. Televoodoo module directory
-
-### Config File Format
-
-```json
-{
-  "authCredentials": {
-    "name": "myrobot",
-    "code": "ABC123"
-  },
-  "upsample_to_frequency_hz": 200.0,
-  "rate_limit_frequency_hz": null,
-  "includeFormats": {
-    "absolute_input": true,
-    "delta_input": false,
-    "absolute_transformed": true,
-    "delta_transformed": true
-  },
-  "includeOrientation": {
-    "quaternion": true,
-    "euler_radian": false,
-    "euler_degree": true
-  },
-  "scale": 1.0,
-  "outputAxes": {
-    "x": 1,
-    "y": 1,
-    "z": -1
-  },
-  "targetFrameDegrees": {
-    "x": 0.0,
-    "y": 0.0,
-    "z": 0.5,
-    "x_rot_deg": 0,
-    "y_rot_deg": 0,
-    "z_rot_deg": 90
-  }
-}
-```
-
-| Section | Purpose |
-|---------|---------|
-| `authCredentials` | Connection credentials: `name` (peripheral name) and `code` (6-char auth code) |
-| `includeFormats` | Which pose formats to output (raw input, deltas, transformed) |
-| `includeOrientation` | Include quaternion, Euler radians, and/or Euler degrees |
-| `scale` | Scale factor applied to positions |
-| `outputAxes` | Axis multipliers (use `-1` to flip an axis) |
-| `targetFrameDegrees` | 6DoF transform: marker → target frame (position in meters, rotation in degrees) |
-| `upsample_to_frequency_hz` | Upsample poses to target frequency (Hz) using linear extrapolation |
-| `rate_limit_frequency_hz` | Limit output to maximum frequency (Hz), drops excess poses |
-
-### Creating Config Files
-
-You can create config files manually according to the examples or by configuring, testing and exporting them with Televoodoo Viewer.
-
-
-
-### Loading Config Files
-
-```python
-from televoodoo import load_config, PoseProvider, Pose, start_televoodoo
-
-# Load config from file
-config = load_config("my_robot_config.json")
-pose_provider = PoseProvider(config)
-
-def on_teleop_event(evt):
-    # project specific callback code 
-    # ...
-
-# Use credentials from config (if specified), or fall back to random
-start_televoodoo(
-    callback=on_teleop_event,
-    name=config.auth_name,  # None = random
-    code=config.auth_code   # None = random
-)
-```
-
-
-## Output Formats Explained
-
-Moved to docs: **[Pose Data Format → Output formats](docs/POSE_DATA_FORMAT.md#output-formats-explained)**.
-
-
-## Advanced Topics
-
-### Upsampling & Rate Limiting
-
-Robot arm controllers often require higher frequency input (100-200 Hz) than the phone can provide (30-60 Hz via WiFi, ~30 Hz via BLE). Televoodoo can upsample pose data using linear extrapolation.
-
-**Via CLI:**
-```bash
-televoodoo --upsample-hz 200          # Upsample to 200 Hz
-televoodoo --rate-limit-hz 30         # Cap output at 30 Hz (no upsampling)
-```
-
-**Via Python:**
-```python
-from televoodoo import start_televoodoo, PoseProvider, load_config
-
-config = load_config("my_robot_config.json")
-pose_provider = PoseProvider(config)
-
-def robot_handler(evt):
-    """Called at ~200 Hz with real or extrapolated poses."""
-    delta = pose_provider.get_delta(evt)
-    if delta:
-        robot.send_delta(delta['dx'], delta['dy'], delta['dz'])
-
-# Just pass upsample_to_hz - resampling is handled internally
-start_televoodoo(callback=robot_handler, upsample_to_hz=200.0, quiet=True)
-```
-
-**Via Config File:**
-```json
-{
-  "upsample_to_frequency_hz": 200.0,
-  "rate_limit_frequency_hz": 30.0
-}
-```
-
-Then load and pass the config:
-```python
-config = load_config("my_robot_config.json")
-start_televoodoo(callback=handler, config=config)
-```
-
-| Config Key | CLI Flag | Description |
-|------------|----------|-------------|
-| `upsample_to_frequency_hz` | `--upsample-hz` | Upsample to target frequency (Hz) using linear extrapolation |
-| `rate_limit_frequency_hz` | `--rate-limit-hz` | Cap output at maximum frequency (Hz) |
-
-**Key behaviors:**
-- Real poses forwarded immediately (zero added latency)
-- Extrapolated poses fill gaps using velocity-based prediction
-- **Safety**: Extrapolation stops if no new pose arrives within expected interval (prevents runaway motion if phone disconnects)
-
-> 💡 **Note:** Upsampling uses **regulated mode by default** for consistent timing at the target frequency. This outputs at fixed intervals with ~5ms max latency — ideal for robot controllers. Use `--no-regulated` if you prefer zero latency with irregular timing.
-
-See `examples/data_upsampling/` for a complete example.
-
-### Haptic Feedback
-
-Send haptic feedback to the iOS app based on robot sensor values (e.g., force feedback).
-The `send_haptic` function normalizes your sensor values to 0.0–1.0 intensity and transmits
-them to the phone, which generates haptic vibrations accordingly.
-
-```python
-import threading
-import time
-from televoodoo import start_televoodoo, send_haptic, PoseProvider, load_config
-
-# --- Force Monitoring Thread ---
-# Runs independently to read robot force values and send haptic feedback
-
-def force_monitor_loop():
-    """Monitor robot force and send haptic feedback to the iOS app."""
-    while True:
-        force = robot.get_force()  # e.g., 0–50 Newtons
-        # Normalize to 0.0–1.0 and send to iPhone
-        send_haptic(force, min_value=0.0, max_value=50.0)
-        time.sleep(0.05)  # 20 Hz update rate
-
-# Start force monitoring in background thread
-monitor_thread = threading.Thread(target=force_monitor_loop, daemon=True)
-monitor_thread.start()
-
-# --- Teleoperation Callback ---
-# Receives poses from the iOS app
-
-config = load_config("my_robot_config.json")
-pose_provider = PoseProvider(config)
-
-def on_teleop_event(evt):
-    delta = pose_provider.get_delta(evt)
-    if delta is None:
-        return
-    # Send delta to robot...
-    robot.move_relative(delta['dx'], delta['dy'], delta['dz'])
-
-# Start televoodoo (blocks until disconnected)
-start_televoodoo(callback=on_teleop_event, quiet=True)
-```
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `value` | float | The sensor value to send (e.g., force in Newtons) |
-| `min_value` | float | Minimum expected value (maps to intensity 0.0) |
-| `max_value` | float | Maximum expected value (maps to intensity 1.0) |
-
-The function is thread-safe and can be called from any thread while `start_televoodoo` is running.
-
-### Quiet Mode
-
-Suppress high-frequency logging (pose events, heartbeat) while still receiving callbacks:
-
-```python
-start_televoodoo(callback=handle_pose, quiet=True)
-```
-
-
 ## Documentation
 
-For in-depth technical details, see `docs/`:
+| Document | Description |
+|----------|-------------|
+| **[Usage](docs/USAGE.md)** | Delta vs absolute poses, CLI options, quiet mode |
+| **[Configuration](docs/CONFIGURATION.md)** | Config file format, loading, and all available options |
+| **[Connection & Authentication](docs/CONNECTION_AUTHENTICATION.md)** | Connection setup, QR codes, credentials, troubleshooting |
+| **[Data Format](docs/DATA_FORMAT.md)** | Coordinate systems, pose fields, binary protocol |
+| **[Output Formats](docs/OUTPUT_FORMATS.md)** | Available output formats and how to enable them |
+| **[Haptic Feedback](docs/HAPTIC_FEEDBACK.md)** | Sending haptic feedback to the phone app |
+| **[Upsampling & Rate Limiting](docs/UPSAMPLING_RATE_LIMITING.md)** | High-frequency control and rate limiting |
 
-- **[Usage](docs/USAGE.md)** — Deltas vs absolute, credentials, connection types
-- **[Pose Data Format](docs/POSE_DATA_FORMAT.md)** — Coordinate systems, field descriptions, validation
-- **[Connection Setup](docs/CONNECTION_SETUP.md)** — QR codes, credentials, multi-device setup
-- **[WiFi API](docs/WIFI_API.md)** — UDP protocol, mDNS discovery (default connection)
-- **[USB API](docs/USB_API.md)** — USB tethering setup, prerequisites, lowest latency option
-- **[BLE Peripheral API](docs/BLE_API.md)** — Service UUIDs, characteristics, protocol details
+### Transport-Specific Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[WiFi API](docs/WIFI_API.md)** | UDP protocol, mDNS discovery (default connection) |
+| **[USB API](docs/USB_API.md)** | USB tethering setup, lowest latency option |
+| **[BLE API](docs/BLE_API.md)** | Bluetooth Low Energy service and protocol |
 
 
 ## Contributing
@@ -383,4 +175,4 @@ Developed with ❤️ for 🤖 by [Mana Robotics](https://www.mana-robotics.com)
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Apache 2.0 License — see [LICENSE](LICENSE) for details.

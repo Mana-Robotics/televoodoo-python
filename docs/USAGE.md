@@ -1,10 +1,12 @@
-# Televoodoo Python - Usage
+# Usage
 
-This page explains how to consume Televoodoo pose events in your application (delta vs absolute), and how to set credentials and connection types.
+This guide explains how to consume Televoodoo pose events in your application, including delta vs absolute poses, CLI options, and quiet mode.
 
-## Option A: Using Pose Deltas
+## Delta vs Absolute Poses
 
-> ✅ **Recommended for Robot Teleoperation!** Deltas always start at 0 when tracking begins. Pause tracking, reposition yourself, then resume — no jumps in robot motion.
+### Option A: Using Pose Deltas (Recommended for Robot Teleoperation)
+
+> ✅ **Recommended!** Deltas always start at 0 when tracking begins. Pause tracking, reposition yourself, then resume — no jumps in robot motion.
 
 Use `PoseProvider.get_delta()` to get transformed deltas directly from events:
 
@@ -34,7 +36,7 @@ start_televoodoo(callback=my_handler)
 
 The delta is calculated relative to the pose where `movement_start=True`, making it perfect for robot teleoperation where you want relative movements.
 
-## Option B: Using Absolute Poses
+### Option B: Using Absolute Poses
 
 > ⚠️ **Not recommended for robot teleoperation.** Absolute poses are non-zero from the start and will jump when tracking is paused and resumed.
 
@@ -60,96 +62,88 @@ def my_handler(evt):
 start_televoodoo(callback=my_handler)
 ```
 
-## Pose Format
+## CLI Options
 
-`PoseProvider.get_absolute()` returns a transformed pose:
-
-```python
-{
-    "movement_start": True,  # New movement origin (for delta calculation)
-    "x": 0.15,               # Position in meters (transformed)
-    "y": 0.20,
-    "z": -0.10,
-    "qx": 0.01234,           # Quaternion (preferred for 3D math)
-    "qy": -0.56789,
-    "qz": 0.12345,
-    "qw": 0.81234,
-    "rx": 0.26,              # Rotation vector (radians) — always included
-    "ry": -0.52,
-    "rz": 0.09
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `movement_start` | bool | `True` = new origin for delta calculation (see below) |
-| `x`, `y`, `z` | float | Position relative to ArUco marker (meters) |
-| `qx`, `qy`, `qz`, `qw` | float | Quaternion — use this for robust 3D calculations |
-| `rx`, `ry`, `rz` | float | Rotation vector (radians) — axis-angle representation |
-
-> **Understanding `movement_start`**: When `true`, this pose becomes the new origin for calculating deltas. This allows you to reposition the phone/controller while not actively controlling, then start a new movement from a different physical position — the robot end effector stays in place and only applies relative deltas from the new origin.
-
-## Authentication Credentials
-
-Televoodoo provides 2 options for connection credentials:
-- **Random** (default): New credentials each launch — good for quick testing  
-- **Static**: Same credentials every time — good for ongoing projects, development, RL demonstration
-
-**Random Credentials**
-
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--name` | Peripheral/server name | Random `voodooXX` |
-| `--code` | 6-character auth code | Random alphanumeric |
-
-**Static Credentials**
-
-Option 1: Set via CLI flag
-```bash
-televoodoo --name myrobot --code ABC123
-```
-
-Option 2: Set in code
-```python
-from televoodoo import start_televoodoo
-
-start_televoodoo(callback=handle_pose, name="myrobot", code="ABC123")
-```
-
-Option 3: Set within a config file (see the main README’s “Config File” section):
-- [Config File](../README.md#config-file)
-
-## Connection Types
-
-You can specify the connection backend:
-
-```python
-start_televoodoo(
-    callback=handle_pose,
-    connection="auto"  # Options: "auto" (default), "wifi", "usb", "ble"
-)
-```
-
-- **`"auto"`** (default): Uses WiFi — recommended for best latency and cross-platform compatibility
-- **`"wifi"`**: UDP-based connection over local network (~60Hz consistent frequency / ~16ms latency)
-- **`"usb"`**: USB tethering connection (~60Hz / ~5-10ms latency) — lowest latency, requires USB cable
-- **`"ble"`**: Bluetooth Low Energy connection (platform-specific, subject to connection interval batching (e.g. iOS), resulting in effectively only ~30 Hz of update frequency / 32ms latency)
-
-Or via CLI:
+### Basic Usage
 
 ```bash
+# Start with WiFi (default), random credentials
+televoodoo
+
+# Set connection type
 televoodoo --connection wifi   # WiFi (default)
 televoodoo --connection usb    # USB tethering (lowest latency)
 televoodoo --connection ble    # Bluetooth
+
+# Set static credentials (scan once, reuse)
+televoodoo --name myrobot --code ABC123
+
+# Combine options
+televoodoo --connection usb --name myrobot --code ABC123 --quiet
 ```
 
-> ⚠️ **USB Connection** requires **opposite** setup for iOS vs Android:
-> - **Android**: Enable USB Tethering on phone, **disable** Mac Internet Sharing
-> - **iOS on macOS**: Enable **macOS Internet Sharing** (share WiFi to "iPhone USB"), **disable** iPhone Personal Hotspot
-> 
-> See [USB API docs](USB_API.md) for details.
+### Available Flags
 
-## See also
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--connection` | Connection type: `wifi`, `usb`, `ble` | `wifi` |
+| `--name` | Peripheral/server name | Random `voodooXX` |
+| `--code` | 6-character auth code | Random alphanumeric |
+| `--quiet` | Suppress high-frequency logging | `False` |
+| `--upsample-hz` | Upsample to target frequency (Hz) | None |
+| `--rate-limit-hz` | Cap output at maximum frequency (Hz) | None |
 
-- [Connection setup](CONNECTION_SETUP.md)
-- [Pose data format](POSE_DATA_FORMAT.md)
+## Python API Options
+
+```python
+from televoodoo import start_televoodoo
+
+start_televoodoo(
+    callback=handle_pose,           # Required: your pose handler
+    connection="wifi",              # "wifi" (default), "usb", or "ble"
+    name="myrobot",                 # Custom name (None = random)
+    code="ABC123",                  # Custom code (None = random)
+    quiet=True,                     # Suppress logging
+    upsample_to_hz=200.0,           # Upsample frequency
+    rate_limit_hz=30.0,             # Rate limit frequency
+    config=config                   # Config object from load_config()
+)
+```
+
+## Quiet Mode
+
+Suppress high-frequency logging (pose events, heartbeat) while still receiving callbacks. Useful for production and high-frequency applications.
+
+**Via CLI:**
+
+```bash
+televoodoo --quiet
+```
+
+**Via Python:**
+
+```python
+start_televoodoo(callback=handle_pose, quiet=True)
+```
+
+When quiet mode is enabled:
+- Connection/disconnection events are still logged
+- Error messages are still shown
+- Pose and heartbeat logs are suppressed
+
+## Connection Types
+
+| Type | Latency | Use Case |
+|------|---------|----------|
+| **WiFi** (default) | ~16ms | General use, cross-platform |
+| **USB** | ~5-10ms | Lowest latency, force feedback loops |
+| **BLE** | ~32ms effective | When WiFi/USB unavailable |
+
+> ⚠️ **USB Connection** requires **opposite** setup for iOS vs Android. See [USB API](USB_API.md) for details.
+
+## See Also
+
+- **[Configuration](CONFIGURATION.md)** — Config file format and options
+- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — Connection setup and troubleshooting
+- **[Data Format](DATA_FORMAT.md)** — Pose field descriptions
+- **[Output Formats](OUTPUT_FORMATS.md)** — Available output format options

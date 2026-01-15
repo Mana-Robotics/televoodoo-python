@@ -1,14 +1,15 @@
-# Televoodoo BLE Peripheral API
+# BLE Peripheral API
 
-## Overview
+Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This document describes the BLE service, characteristics, and binary protocol.
 
-Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This spec uses **binary data format** for pose and command data, matching the WiFi protocol for code reuse.
+> This is a transport-specific document. For general connection information, see [Connection & Authentication](CONNECTION_AUTHENTICATION.md).
 
 ---
 
 ## BLE Service Configuration
 
 ### Service UUID
+
 ```
 1C8FD138-FC18-4846-954D-E509366AEF61
 ```
@@ -176,6 +177,8 @@ HAPTIC_FORMAT = "<4sBBfBB"  # little-endian, 12 bytes
 - iPhone subscribes to notifications on this characteristic
 - iPhone triggers haptic feedback proportional to intensity value
 
+See [Haptic Feedback](HAPTIC_FEEDBACK.md) for usage details.
+
 ---
 
 ## Disconnect Detection
@@ -195,7 +198,7 @@ The 3-second heartbeat timeout catches cases where:
 
 ## Callback Event Format
 
-Same format as WiFi for compatibility:
+Same format as WiFi for compatibility. See [Data Format](DATA_FORMAT.md) for full details.
 
 ```python
 # Pose event
@@ -289,3 +292,13 @@ BLE MTU is typically 20-512 bytes depending on negotiation. The packets are desi
 | HAPTIC | 12 bytes | Yes |
 
 **Recommendation**: iOS app should request MTU ≥ 64 bytes during connection. Most modern devices support 185+ bytes.
+
+---
+
+## See Also
+
+- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — General connection setup
+- **[Data Format](DATA_FORMAT.md)** — Pose data fields
+- **[Haptic Feedback](HAPTIC_FEEDBACK.md)** — Using haptic feedback
+- **[WiFi API](WIFI_API.md)** — WiFi/UDP protocol (shared binary format)
+- **[USB API](USB_API.md)** — USB connection
