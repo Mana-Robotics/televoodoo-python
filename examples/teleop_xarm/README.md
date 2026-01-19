@@ -14,7 +14,7 @@ This example:
 
 ## Safety
 
-⚠️ This can move a real robot. Keep the workspace clear, use reduced mode / low speeds while tuning, and keep an E-stop accessible.
+⚠️ This can move a real robot. Configure speed and acceleration limits, keep the workspace clear and keep an E-stop accessible.
 
 ## Configuration
 
@@ -58,13 +58,29 @@ python examples/teleop_xarm/teleop_xarm.py \
   --dry-run
 ```
 
-### Real mode (moves the robot)
+
+### Real mode with config file
+
+Note: Velocity and speed limits are loaded from the config file. Make sure they are set correctly!
+
 
 ```bash
 python examples/teleop_xarm/teleop_xarm.py \
   --config examples/teleop_xarm/xarm_config.json \
   --ip 192.168.1.100 \
   --enable-motion \
+```
+
+
+### Real mode with custom motion limits -> WARNING ⚠️
+
+```bash
+python examples/teleop_xarm/teleop_xarm.py \
+  --config examples/teleop_xarm/xarm_config.json \
+  --ip 192.168.1.100 \
+  --enable-motion \
+  --vel-limit 0.5 \
+  --acc-limit 50.0
 ```
 
 ## Output (dry-run)
@@ -86,4 +102,19 @@ target: [301.2, 121.0, 449.8, 0.02, -0.01, 0.16]
 | `--ip ADDRESS` | xArm IP address (required with `--enable-motion`) |
 | `--enable-motion` | Enable robot motion (dangerous) |
 | `--dry-run` | Print poses only, don't connect to robot (default) |
+| `--vel-limit FLOAT` | Maximum velocity in m/s (clamps fast movements) |
+| `--acc-limit FLOAT` | Maximum acceleration in m/s² (symmetric, limits jerk) |
+
+### Motion Limiting
+
+The `--vel-limit` and `--acc-limit` flags provide safety limits for robot motion:
+
+- **Velocity limit**: Clamps position changes to not exceed the specified speed
+- **Acceleration limit**: Limits how quickly speed can change (applies to both acceleration and deceleration)
+
+When limits are applied, a warning is logged and the pose data includes `"limited": true`.
+
+**Recommended starting values:**
+- `--vel-limit 0.3` (0.3 m/s) - for UFACTORY Lite 6 the max TCP speed limit is 500 mm/s (see Lite 6 user manual). If exceeded, the robot controller will raise an error and stop.
+- `--acc-limit 10.0` (10 m/s²) - for UFACTORY Lite 6 the TCP acceleration limit is 50.000 mm/s (see Lite 6 user manual).
 

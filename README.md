@@ -153,7 +153,7 @@ Complete examples can be found in `examples/`:
 | **[Data Format](docs/DATA_FORMAT.md)** | Coordinate systems, pose fields, binary protocol |
 | **[Output Formats](docs/OUTPUT_FORMATS.md)** | Available output formats and how to enable them |
 | **[Haptic Feedback](docs/HAPTIC_FEEDBACK.md)** | Sending haptic feedback to the phone app |
-| **[Upsampling & Rate Limiting](docs/UPSAMPLING_RATE_LIMITING.md)** | High-frequency control and rate limiting |
+| **[Upsampling & Rate Limiting](docs/UPSAMPLING_RATE_LIMITING.md)** | ⚠️ experimental: High-frequency control and rate limiting |
 
 ### Transport-Specific Documentation
 

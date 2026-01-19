@@ -12,14 +12,18 @@ import sys
 import threading
 import time
 
-from televoodoo import start_televoodoo, PoseProvider
-from televoodoo.config import OutputConfig
+from televoodoo import start_televoodoo, PoseProvider, load_config
 from televoodoo.ble import run_simulation
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Televoodoo - 6DoF pose streaming")
-    parser.add_argument("--config", type=str, default="")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="",
+        help="Path to config JSON file (for transforms, limits, credentials)",
+    )
     parser.add_argument(
         "--name",
         type=str,
@@ -76,23 +80,22 @@ def main() -> int:
         dest="no_regulated",
         help="Disable fixed-interval timing (zero latency but irregular timing)",
     )
+    parser.add_argument(
+        "--vel-limit",
+        type=float,
+        default=None,
+        help="Maximum velocity in m/s (limits position changes for safety)",
+    )
+    parser.add_argument(
+        "--acc-limit",
+        type=float,
+        default=None,
+        help="Maximum acceleration in m/s² (symmetric, applies to deceleration too)",
+    )
     args = parser.parse_args()
 
-    config = OutputConfig(
-        includeFormats={
-            "absolute_input": True,
-            "delta_input": False,
-            "absolute_transformed": True,
-            "delta_transformed": False,
-        },
-        includeOrientation={
-            "quaternion": True,
-            "euler_radian": False,
-            "euler_degree": False,
-        },
-        scale=1.0,
-        outputAxes={"x": 1.0, "y": 1.0, "z": 1.0},
-    )
+    # Load config from file if specified, otherwise use defaults
+    config = load_config(args.config if args.config else None)
     pose_provider = PoseProvider(config)
 
     def on_pose(pose):
@@ -123,14 +126,17 @@ def main() -> int:
         
         start_televoodoo(
             callback=on_pose,
-            name=args.name,
-            code=args.code,
+            name=args.name or config.auth_name,
+            code=args.code or config.auth_code,
             connection=args.connection,
             quiet=args.quiet,
             wifi_port=args.wifi_port,
-            upsample_to_hz=args.upsample_hz,
+            config=config,  # Pass config for settings from config file
+            upsample_to_hz=args.upsample_hz,  # CLI args override config
             rate_limit_hz=args.rate_limit_hz,
             regulated=regulated,
+            vel_limit=args.vel_limit,
+            acc_limit=args.acc_limit,
         )
 
     return 0

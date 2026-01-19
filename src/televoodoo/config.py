@@ -22,6 +22,8 @@ class OutputConfig:
         auth_code: Optional static authentication code (overrides random generation)
         upsample_to_frequency_hz: Target frequency for upsampling via linear extrapolation
         rate_limit_frequency_hz: Maximum output frequency (drops excess poses)
+        vel_limit: Maximum velocity in m/s (position limiting for safety)
+        acc_limit: Maximum acceleration in m/s² (symmetric, applies to deceleration too)
     """
     includeFormats: Dict[str, bool]
     includeOrientation: Dict[str, bool]
@@ -35,6 +37,9 @@ class OutputConfig:
     # Resampling settings
     upsample_to_frequency_hz: Optional[float] = None
     rate_limit_frequency_hz: Optional[float] = None
+    # Motion limiting settings
+    vel_limit: Optional[float] = None  # Maximum velocity in m/s
+    acc_limit: Optional[float] = None  # Maximum acceleration in m/s²
 
 
 def load_config(path: Optional[str] = None) -> OutputConfig:
@@ -119,6 +124,12 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
     upsample_to_frequency_hz = float(upsample_hz) if upsample_hz is not None else None
     rate_limit_frequency_hz = float(rate_limit_hz) if rate_limit_hz is not None else None
 
+    # Parse motion limiting settings
+    vel_limit_raw = data.get("vel_limit")
+    acc_limit_raw = data.get("acc_limit")
+    vel_limit = float(vel_limit_raw) if vel_limit_raw is not None else None
+    acc_limit = float(acc_limit_raw) if acc_limit_raw is not None else None
+
     return OutputConfig(
         includeFormats=data.get(
             "includeFormats",
@@ -140,5 +151,7 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
         auth_code=auth_code,
         upsample_to_frequency_hz=upsample_to_frequency_hz,
         rate_limit_frequency_hz=rate_limit_frequency_hz,
+        vel_limit=vel_limit,
+        acc_limit=acc_limit,
     )
 

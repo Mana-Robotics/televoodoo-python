@@ -52,6 +52,8 @@ def start_televoodoo(
     upsample_to_hz: Optional[float] = None,
     rate_limit_hz: Optional[float] = None,
     regulated: Optional[bool] = None,
+    vel_limit: Optional[float] = None,
+    acc_limit: Optional[float] = None,
     config: Optional["OutputConfig"] = None,
 ) -> None:
     """Start Televoodoo and wait for phone app connection.
@@ -75,9 +77,11 @@ def start_televoodoo(
         regulated: Controls timing when upsampling. Default (None) enables regulated
             mode when upsampling for consistent timing (~5ms max latency). Set to
             False for zero latency with irregular timing.
-        config: Optional OutputConfig. If provided and upsample_to_hz/rate_limit_hz
-            are not set, values will be read from config.upsample_to_frequency_hz
-            and config.rate_limit_frequency_hz.
+        vel_limit: Maximum velocity in m/s. Poses exceeding this limit are clamped.
+        acc_limit: Maximum acceleration in m/s². Symmetric (applies to deceleration).
+        config: Optional OutputConfig. If provided and parameters are not set directly,
+            values will be read from config (upsample_to_frequency_hz, 
+            rate_limit_frequency_hz, vel_limit, acc_limit).
 
     Raises:
         RuntimeError: If the requested connection type is not supported on this platform.
@@ -106,19 +110,42 @@ def start_televoodoo(
         wifi_port=wifi_port if resolved_connection in ("wifi", "usb") else None,
     )
 
-    # Resolve resampling settings from config if not provided directly
+    # Resolve settings from config if not provided directly
     effective_upsample_hz = upsample_to_hz
     effective_rate_limit_hz = rate_limit_hz
+    effective_vel_limit = vel_limit
+    effective_acc_limit = acc_limit
     
     if config is not None:
         if effective_upsample_hz is None:
             effective_upsample_hz = getattr(config, 'upsample_to_frequency_hz', None)
         if effective_rate_limit_hz is None:
             effective_rate_limit_hz = getattr(config, 'rate_limit_frequency_hz', None)
+        if effective_vel_limit is None:
+            effective_vel_limit = getattr(config, 'vel_limit', None)
+        if effective_acc_limit is None:
+            effective_acc_limit = getattr(config, 'acc_limit', None)
 
-    # Set up resampling if enabled
+    # Set up processing chain: raw -> motion_limiter -> resampler -> callback
     effective_callback = callback
     resampler = None
+    motion_limiter = None
+    
+    # Set up motion limiting if enabled
+    if effective_vel_limit is not None or effective_acc_limit is not None:
+        from .motion_limiter import MotionLimiter
+        
+        motion_limiter = MotionLimiter(
+            vel_limit=effective_vel_limit,
+            acc_limit=effective_acc_limit,
+            quiet=quiet,
+        )
+        
+        print(json.dumps({
+            "type": "motion_limiting_enabled",
+            "vel_limit": effective_vel_limit,
+            "acc_limit": effective_acc_limit,
+        }), flush=True)
     
     if effective_upsample_hz is not None or effective_rate_limit_hz is not None:
         from .resampler import PoseResampler
@@ -135,11 +162,6 @@ def start_televoodoo(
         if callback is not None:
             resampler.start(callback=callback)
         
-        def feed_resampler(evt: Dict[str, Any]) -> None:
-            resampler.feed(evt)
-        
-        effective_callback = feed_resampler
-        
         if effective_upsample_hz:
             print(json.dumps({
                 "type": "resampling_enabled",
@@ -147,6 +169,24 @@ def start_televoodoo(
                 "rate_limit_hz": effective_rate_limit_hz,
                 "regulated": effective_regulated,
             }), flush=True)
+
+    # Build the processing chain: raw -> motion_limiter -> resampler -> callback
+    # Chain is built from the end backwards
+    if resampler is not None:
+        # Resampler feeds to user callback (already started above)
+        def feed_resampler(evt: Dict[str, Any]) -> None:
+            resampler.feed(evt)
+        effective_callback = feed_resampler
+    
+    if motion_limiter is not None:
+        # Motion limiter feeds to resampler (or callback if no resampler)
+        next_callback = effective_callback
+        if next_callback is not None:
+            motion_limiter.start(callback=next_callback)
+        
+        def feed_limiter(evt: Dict[str, Any]) -> None:
+            motion_limiter.feed(evt)
+        effective_callback = feed_limiter
 
     try:
         if resolved_connection == "ble":
@@ -164,7 +204,9 @@ def start_televoodoo(
         )
         raise
     finally:
-        # Clean up resampler if it was created
+        # Clean up motion limiter and resampler if they were created
+        if motion_limiter is not None:
+            motion_limiter.stop()
         if resampler is not None:
             resampler.stop()
 

@@ -18,8 +18,8 @@ Config files define how poses are transformed from the ArUco marker frame to you
     "name": "myrobot",
     "code": "ABC123"
   },
-  "upsample_to_frequency_hz": 200.0,
-  "rate_limit_frequency_hz": null,
+  "vel_limit": 0.3,
+  "acc_limit": 10.0,
   "includeFormats": {
     "absolute_input": true,
     "delta_input": false,
@@ -83,6 +83,30 @@ When set, these credentials are used instead of random ones. The phone only need
 | `rate_limit_frequency_hz` | float or null | Cap output at maximum frequency, drops excess poses |
 
 See [Upsampling & Rate Limiting](UPSAMPLING_RATE_LIMITING.md) for details.
+
+### Motion Limiting Options
+
+```json
+{
+  "vel_limit": 0.3,
+  "acc_limit": 10.0
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `vel_limit` | float or null | Maximum velocity in m/s. Poses exceeding this are clamped. |
+| `acc_limit` | float or null | Maximum acceleration in m/s². Symmetric (applies to deceleration too). |
+
+Motion limiting is a safety feature for robot teleoperation. When consecutive poses would result in motion exceeding the configured limits, the output position is clamped to respect the maximum allowed velocity and acceleration. Orientation is passed through unchanged.
+
+When limiting is applied, the pose data includes `"limited": true` and a warning is logged:
+
+```json
+{"type": "motion_limit_warning", "message": "Motion limited: vel=1.50m/s > 0.50m/s", "reasons": ["vel=1.50m/s > 0.50m/s"]}
+```
+
+CLI flags: `--vel-limit` and `--acc-limit`
 
 ### Output Formats
 

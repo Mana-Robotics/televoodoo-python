@@ -1,20 +1,11 @@
 {
   "authCredentials": {
-    "name": "myrobot",
-    "code": "ABC123"
-  },
-  "includeFormats": {
-    "absolute_input": true,
-    "delta_input": false,
-    "absolute_transformed": true,
-    "delta_transformed": true
-  },
-  "includeOrientation": {
-    "quaternion": true,
-    "euler_radian": false,
-    "euler_degree": false
+    "name": "danielXarm",
+    "code": "CDE456"
   },
   "scale": 1000,
+  "vel_limit": 0.3,
+  "acc_limit": 2.0,
   "outputAxes": {
     "x": 1,
     "y": 1,

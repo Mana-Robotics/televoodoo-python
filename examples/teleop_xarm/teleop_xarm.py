@@ -51,6 +51,18 @@ def main() -> int:
         action="store_true",
         help="Do not connect to xArm; print computed poses only (default).",
     )
+    parser.add_argument(
+        "--vel-limit",
+        type=float,
+        default=None,
+        help="Maximum velocity in m/s (limits position changes for safety).",
+    )
+    parser.add_argument(
+        "--acc-limit",
+        type=float,
+        default=None,
+        help="Maximum acceleration in m/s² (symmetric, applies to deceleration too).",
+    )
     args = parser.parse_args()
 
     dry_run = bool(args.dry_run) or (not args.enable_motion)
@@ -72,6 +84,24 @@ def main() -> int:
     config = load_config(args.config)
     pose_provider = PoseProvider(config)
     print(f"Using config: {args.config}", flush=True)
+
+    # Check if motion limits are configured (CLI args override config file)
+    effective_vel_limit = args.vel_limit if args.vel_limit is not None else config.vel_limit
+    effective_acc_limit = args.acc_limit if args.acc_limit is not None else config.acc_limit
+
+    if effective_vel_limit is None or effective_acc_limit is None:
+        missing = []
+        if effective_vel_limit is None:
+            missing.append("vel_limit")
+        if effective_acc_limit is None:
+            missing.append("acc_limit")
+        print(
+            f"\n⚠️  WARNING: No motion limits configured ({', '.join(missing)})!\n"
+            f"   This is dangerous for robot teleoperation.\n"
+            f"   Set limits via --vel-limit/--acc-limit flags or in config file.\n"
+            f"   Recommended: --vel-limit 0.3 --acc-limit 10.0\n",
+            file=sys.stderr,
+        )
 
     # -----------------------------------------------------------------------
     # Robot Setup
@@ -175,6 +205,9 @@ def main() -> int:
         quiet=True,
         name=config.auth_name,
         code=config.auth_code,
+        config=config,  # Pass config for vel_limit, acc_limit from config file
+        vel_limit=args.vel_limit,  # CLI args override config file
+        acc_limit=args.acc_limit,
     )
     return 0
 

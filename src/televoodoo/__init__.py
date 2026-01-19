@@ -13,6 +13,7 @@ from .pose import Pose
 from .config import OutputConfig, load_config
 from .pose_provider import PoseProvider
 from .resampler import PoseResampler
+from .motion_limiter import MotionLimiter
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
 from .udp_service import send_haptic
@@ -25,6 +26,7 @@ __all__ = [
     "send_haptic",
     "PoseProvider",
     "PoseResampler",
+    "MotionLimiter",
     "Pose",
     "OutputConfig",
     "load_config",
