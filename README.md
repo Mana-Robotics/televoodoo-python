@@ -89,12 +89,12 @@ televoodoo --name myrobot --code ABC123
 ```python
 from televoodoo import start_televoodoo, PoseProvider, load_config
 
-# Load config (optional - uses defaults if None)
-config = load_config()
+# Load config with control mode (delta-pose, velocity, or absolute-pose)
+config = load_config("my_config.json")
 pose_provider = PoseProvider(config)
 
 def my_pose_handler(evt):
-    # For robot teleoperation, use get_delta():
+    # For robot teleoperation, use get_delta() or get_velocity()
     delta = pose_provider.get_delta(evt)
     if delta is None:
         return  # Not a pose event or no origin set yet
@@ -147,7 +147,7 @@ Complete examples can be found in `examples/`:
 
 | Document | Description |
 |----------|-------------|
-| **[Usage](docs/USAGE.md)** | Delta vs absolute poses, CLI options, quiet mode |
+| **[Usage](docs/USAGE.md)** | PoseProvider API methods, CLI options, quiet mode |
 | **[Configuration](docs/CONFIGURATION.md)** | Config file format, loading, and all available options |
 | **[Connection & Authentication](docs/CONNECTION_AUTHENTICATION.md)** | Connection setup, QR codes, credentials, troubleshooting |
 | **[Data Format](docs/DATA_FORMAT.md)** | Coordinate systems, pose fields, binary protocol |

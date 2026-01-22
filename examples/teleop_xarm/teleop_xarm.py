@@ -63,6 +63,19 @@ def main() -> int:
         default=None,
         help="Maximum acceleration in m/s² (symmetric, applies to deceleration too).",
     )
+    parser.add_argument(
+        "--ang-limit",
+        type=float,
+        default=None,
+        help="Maximum angular velocity in rad/s (for velocity mode).",
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["delta-pose", "velocity"],
+        default=None,
+        help="Control mode: delta-pose (position via deltas), velocity (velocity control). Absolute-pose (absolute positions) is forbidden.",
+    )
     args = parser.parse_args()
 
     dry_run = bool(args.dry_run) or (not args.enable_motion)
@@ -84,6 +97,26 @@ def main() -> int:
     config = load_config(args.config)
     pose_provider = PoseProvider(config)
     print(f"Using config: {args.config}", flush=True)
+
+    # Determine control mode (required CLI argument)
+    VALID_MODES = ["delta-pose", "velocity"]
+    
+    if args.mode is None:
+        print(
+            "\n❌ ERROR: No control mode specified!\n"
+            "   You must set --mode via CLI.\n"
+            "\n"
+            "   Available modes:\n"
+            "     delta-pose    - Position control via deltas from movement origin\n"
+            "     velocity      - Velocity control (vx, vy, vz, wx, wy, wz)\n"
+            "\n"
+            "   Example: --mode delta-pose\n",
+            file=sys.stderr,
+        )
+        return 2
+    
+    effective_mode = args.mode
+    print(f"Control mode: {effective_mode}", flush=True)
 
     # Check if motion limits are configured (CLI args override config file)
     effective_vel_limit = args.vel_limit if args.vel_limit is not None else config.vel_limit
@@ -121,7 +154,24 @@ def main() -> int:
             return 2
         arm = XArmAPI(args.ip)
         arm.motion_enable(enable=True)
-        arm.set_mode(1)  # servo motion mode required for set_servo_cartesian_aa
+        if effective_mode == "velocity":
+            arm.set_mode(5)  # Cartesian velocity control mode
+            print("xArm mode: 5 (Cartesian velocity control)", flush=True)
+            
+            # Set TCP acceleration and jerk limits on xArm Controller for snappier velocity response
+            # Must be set for velocity control mode, otherwise the robot will move with a slow acceleration.
+            tcp_maxacc = 50000  # in mm/s² for velocity mode (higher = snappier response)
+            tcp_jerk = 100000  # in mm/s³ for velocity mode (higher = snappier response)
+            
+            arm.set_tcp_maxacc(tcp_maxacc)
+            print(f"  TCP max acceleration: {tcp_maxacc} mm/s²", flush=True)
+            arm.set_tcp_jerk(tcp_jerk)
+            print(f"  TCP jerk: {tcp_jerk} mm/s³", flush=True)
+
+        else:
+            # delta-pose uses servo mode
+            arm.set_mode(1)  # servo motion mode required for set_servo_cartesian_aa
+            print("xArm mode: 1 (servo position control)", flush=True)
         arm.set_state(0)
         time.sleep(0.1)
 
@@ -142,10 +192,10 @@ def main() -> int:
         return ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))
 
     # -----------------------------------------------------------------------
-    # Teleoperation Event Handler
+    # Teleoperation Event Handler (delta-pose mode)
     # -----------------------------------------------------------------------
 
-    def on_teleop_event(evt: Dict[str, Any]) -> None:
+    def on_teleop_event_delta_pose(evt: Dict[str, Any]) -> None:
         nonlocal have_origin, robot_start_pos, robot_start_q
 
         # Get transformed delta directly from event
@@ -185,16 +235,93 @@ def main() -> int:
         pose_target = [x_target, y_target, z_target, rx_target, ry_target, rz_target]
 
         if dry_run or arm is None:
-            print(f"target: {pose_target}", flush=True)
+            print(f"delta-pose target: {pose_target}", flush=True)
             return
 
         # Send command to robot
         arm.set_servo_cartesian_aa(
             pose_target,
+            speed=None,
             is_radian=True,
             is_tool_coord=False,
             relative=False,
         )
+
+   
+    # -----------------------------------------------------------------------
+    # Teleoperation Event Handler (Velocity Mode)
+    # -----------------------------------------------------------------------
+
+    def clamp(value: float, limit: float | None) -> float:
+        """Clamp value to [-limit, limit]. If limit is None, return value unchanged."""
+        if limit is None:
+            return value
+        return max(-limit, min(limit, value))
+
+    def on_teleop_event_velocity(evt: Dict[str, Any]) -> None:
+        nonlocal have_origin
+
+        # Get velocity from consecutive poses
+        velocity = pose_provider.get_velocity(evt)
+        if velocity is None:
+            return
+
+        # On movement_start, mark that we have origin but send zero velocity
+        if velocity.get("movement_start"):
+            have_origin = True
+            if not dry_run and arm is not None:
+                # Stop the robot on movement_start
+                arm.vc_set_cartesian_velocity([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            if dry_run:
+                print("velocity: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] (movement_start)", flush=True)
+            return
+
+        if not have_origin:
+            return
+
+        # Extract linear velocity (already scaled per config, e.g., mm/s if scale=1000)
+        vx = float(velocity.get("vx", 0.0))
+        vy = float(velocity.get("vy", 0.0))
+        vz = float(velocity.get("vz", 0.0))
+
+        # Extract angular velocity (rad/s)
+        wx = float(velocity.get("wx", 0.0))
+        wy = float(velocity.get("wy", 0.0))
+        wz = float(velocity.get("wz", 0.0))
+
+        # Apply velocity limits if configured
+        # --vel-limit is in m/s, scale it to match the scaled velocity units
+        scaled_vel_limit = effective_vel_limit * config.scale if effective_vel_limit is not None else None
+        ang_limit = args.ang_limit  # Already in rad/s, no scaling needed
+
+        vx = clamp(vx, scaled_vel_limit)
+        vy = clamp(vy, scaled_vel_limit)
+        vz = clamp(vz, scaled_vel_limit)
+        wx = clamp(wx, ang_limit)
+        wy = clamp(wy, ang_limit)
+        wz = clamp(wz, ang_limit)
+
+        # Build velocity command: [vx, vy, vz, wx, wy, wz]
+        velocity_cmd = [vx, vy, vz, wx, wy, wz]
+
+        if dry_run or arm is None:
+            dt = velocity.get("dt", 0.0)
+            print(f"velocity: {velocity_cmd} (dt={dt:.4f}s)", flush=True)
+            return
+
+        # Send velocity command to robot using vc_set_cartesian_velocity
+        # This is the continuous velocity control API for mode 5
+        # duration=0.1 means it's keeping the velocity constant for 0.1 seconds if no new command is sent.
+        arm.vc_set_cartesian_velocity(velocity_cmd, is_radian=True, is_tool_coord=False, duration=0.1)
+
+    # Select the appropriate event handler based on mode
+    if effective_mode == "delta-pose":
+        on_teleop_event = on_teleop_event_delta_pose
+    elif effective_mode == "velocity":
+        on_teleop_event = on_teleop_event_velocity
+    else:
+        # Should not reach here due to earlier validation
+        raise ValueError(f"Unknown mode: {effective_mode}")
 
     # -----------------------------------------------------------------------
     # Start Televoodoo (blocks until connection closes)

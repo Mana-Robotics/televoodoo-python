@@ -4,12 +4,21 @@ Provides transformed pose data from teleoperation events.
 """
 
 from __future__ import annotations
-from typing import Dict, Any, Tuple
+from dataclasses import dataclass
+from typing import Dict, Any, Optional, Tuple
 import math
+import time
 
 from .pose import Pose
 from .config import OutputConfig
 from . import math as tvm
+
+
+@dataclass
+class _TimestampedPose:
+    """Pose with timestamp for velocity calculations."""
+    pose: Pose
+    timestamp: float  # monotonic time
 
 
 class PoseProvider:
@@ -34,10 +43,13 @@ class PoseProvider:
     def __init__(self, config: OutputConfig) -> None:
         self.config = config
         self._origin: Pose | None = None
+        # State for velocity calculations
+        self._prev_timestamped_pose: Optional[_TimestampedPose] = None
 
     def reset_origin(self) -> None:
-        """Clear the stored origin pose."""
+        """Clear the stored origin pose and velocity state."""
         self._origin = None
+        self._prev_timestamped_pose = None
 
     def get_absolute(self, evt: Dict[str, Any]) -> Dict[str, Any] | None:
         """Get transformed absolute pose from a teleoperation event.
@@ -184,6 +196,114 @@ class PoseProvider:
         })
 
         return delta
+
+    def get_velocity(self, evt: Dict[str, Any], min_dt: float = 0.001) -> Dict[str, Any] | None:
+        """Get velocity (linear and angular) from consecutive pose events.
+
+        This method computes instantaneous velocities by comparing the current
+        pose with the previous pose and dividing by the elapsed time. Useful
+        for velocity-based robot control (e.g., xArm set_cartesian_velo_continuous).
+
+        The returned velocity contains:
+        - vx, vy, vz: Linear velocity in units/s (scaled per config, e.g., mm/s if scale=1000)
+        - wx, wy, wz: Angular velocity in rad/s (rotation vector derivative)
+        - dt: Time delta since last pose (seconds)
+        - movement_start: True if this is a new movement origin (velocities will be zero)
+
+        Note: On movement_start, velocities are returned as zero since there is no
+        previous pose to compute velocity from. The first pose after movement_start
+        will have valid velocities.
+
+        Args:
+            evt: Event dictionary from Televoodoo callback.
+            min_dt: Minimum time delta in seconds. If dt < min_dt, None is returned
+                to avoid division by very small numbers. Default: 0.001 (1ms).
+
+        Returns:
+            Velocity dictionary with linear/angular velocities, or None if:
+            - Event is not a pose event
+            - Time delta is too small (< min_dt)
+        """
+        pose = Pose.from_teleop_event(evt)
+        if pose is None:
+            return None
+
+        now = time.monotonic()
+
+        # Reset state on movement_start
+        if pose.movement_start:
+            self._origin = pose
+            self._prev_timestamped_pose = _TimestampedPose(pose=pose, timestamp=now)
+            # Return zero velocities on movement_start
+            return {
+                "movement_start": True,
+                "vx": 0.0,
+                "vy": 0.0,
+                "vz": 0.0,
+                "wx": 0.0,
+                "wy": 0.0,
+                "wz": 0.0,
+                "dt": 0.0,
+            }
+
+        # No previous pose yet - can't compute velocity
+        if self._prev_timestamped_pose is None:
+            self._prev_timestamped_pose = _TimestampedPose(pose=pose, timestamp=now)
+            return None
+
+        # Calculate time delta
+        dt = now - self._prev_timestamped_pose.timestamp
+        if dt < min_dt:
+            # Time delta too small - skip to avoid numerical issues
+            return None
+
+        prev_pose = self._prev_timestamped_pose.pose
+
+        # Build target frame transform
+        (tx, ty, tz), target_q = self._build_target_frame_quat()
+        invT = (-target_q[0], -target_q[1], -target_q[2], target_q[3])
+
+        # Position delta in target frame
+        dx = pose.x - prev_pose.x
+        dy = pose.y - prev_pose.y
+        dz = pose.z - prev_pose.z
+        ddx, ddy, ddz = self._rotate_vector_by_quat((dx, dy, dz), invT)
+
+        # Apply output axes and scale to position delta, then compute velocity
+        vx = self._apply_scale(ddx * self.config.outputAxes.get("x", 1)) / dt
+        vy = self._apply_scale(ddy * self.config.outputAxes.get("y", 1)) / dt
+        vz = self._apply_scale(ddz * self.config.outputAxes.get("z", 1)) / dt
+
+        # Rotation delta in target frame (for angular velocity)
+        prev_q = (prev_pose.qx, prev_pose.qy, prev_pose.qz, prev_pose.qw)
+        current_q = (pose.qx, pose.qy, pose.qz, pose.qw)
+        prev_q_target = self._quat_multiply(invT, prev_q)
+        current_q_target = self._quat_multiply(invT, current_q)
+
+        # Compute delta quaternion (base frame: q_delta = q_current * inv(q_prev))
+        q_delta = tvm.quat_delta(prev_q_target, current_q_target, frame="base")
+
+        # Convert delta quaternion to rotation vector (axis-angle)
+        drx, dry, drz = tvm.quat_to_rotvec(q_delta)
+
+        # Angular velocity = rotation vector / dt (rad/s)
+        wx = drx / dt
+        wy = dry / dt
+        wz = drz / dt
+
+        # Update state for next call
+        self._prev_timestamped_pose = _TimestampedPose(pose=pose, timestamp=now)
+
+        return {
+            "movement_start": False,
+            "vx": vx,
+            "vy": vy,
+            "vz": vz,
+            "wx": wx,
+            "wy": wy,
+            "wz": wz,
+            "dt": dt,
+        }
 
     @staticmethod
     def _quat_multiply(a: Tuple[float, float, float, float], b: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
