@@ -29,7 +29,7 @@ Config files define how poses are transformed from the ArUco marker frame to you
   "outputAxes": {
     "x": 1,
     "y": 1,
-    "z": -1
+    "z": 1
   },
   "vel_limit": 0.3,
   "acc_limit": 10.0,
@@ -70,24 +70,6 @@ Config files define how poses are transformed from the ArUco marker frame to you
 
 When set, these credentials are used instead of random ones. The phone only needs to scan the QR code once.
 
-### Scale and Axis Configuration
-
-```json
-{
-  "scale": 1.0,
-  "outputAxes": {
-    "x": 1,
-    "y": 1,
-    "z": -1
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `scale` | float | Scale factor applied to positions (default: 1.0) |
-| `outputAxes.x/y/z` | int | Axis multipliers: use `1` or `-1` to flip an axis |
-
 ### Target Frame Transform
 
 ```json
@@ -109,6 +91,37 @@ Defines the 6DoF transform from the ArUco marker frame to your target frame (e.g
 |-------|------|-------------|
 | `x`, `y`, `z` | float | Position offset in meters |
 | `x_rot_deg`, `y_rot_deg`, `z_rot_deg` | float | Rotation offset in degrees |
+
+
+### Scale Dimensions
+
+```json
+{
+  "scale": 1.0,
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `scale` | float | Scale factor applied to positions (default: 1.0) |
+
+
+
+### Axis Configuration
+
+```json
+{
+  "outputAxes": {
+    "x": 1,
+    "y": 1,
+    "z": 1
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `outputAxes.x/y/z` | int | Axis multipliers: use `1` or `-1` to flip an axis |
 
 
 ### Motion Limiting Options

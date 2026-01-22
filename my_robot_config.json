@@ -22,7 +22,7 @@
     "outputAxes": {
       "x": 1,
       "y": 1,
-      "z": -1
+      "z": 1
     },
     "targetFramePose": {
       "x": 0.0,

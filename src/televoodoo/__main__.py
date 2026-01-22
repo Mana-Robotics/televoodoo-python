@@ -108,12 +108,25 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    # Valid options for --log-data and --log-format
+    VALID_LOG_DATA = {"absolute_input", "delta_input", "absolute_transformed", "delta_transformed", "velocity"}
+    VALID_LOG_FORMAT = {"quaternion", "rotation_vector", "euler_radian", "euler_degree"}
+
     # Load config from file if specified, otherwise use defaults
     config = load_config(args.config if args.config else None)
 
     # Override logData from CLI if specified
     if args.log_data is not None:
         requested = set(args.log_data.split(",")) if args.log_data else set()
+        # Filter out empty strings from splitting
+        requested = {r.strip() for r in requested if r.strip()}
+        # Warn about unknown options
+        unknown = requested - VALID_LOG_DATA
+        if unknown:
+            print(json.dumps({
+                "type": "warning",
+                "message": f"Unknown --log-data option(s): {', '.join(sorted(unknown))}. Valid options: {', '.join(sorted(VALID_LOG_DATA))}"
+            }), flush=True)
         config.logData = {
             "absolute_input": "absolute_input" in requested,
             "delta_input": "delta_input" in requested,
@@ -125,6 +138,15 @@ def main() -> int:
     # Override logDataFormat from CLI if specified
     if args.log_format is not None:
         requested = set(args.log_format.split(",")) if args.log_format else set()
+        # Filter out empty strings from splitting
+        requested = {r.strip() for r in requested if r.strip()}
+        # Warn about unknown options
+        unknown = requested - VALID_LOG_FORMAT
+        if unknown:
+            print(json.dumps({
+                "type": "warning",
+                "message": f"Unknown --log-format option(s): {', '.join(sorted(unknown))}. Valid options: {', '.join(sorted(VALID_LOG_FORMAT))}"
+            }), flush=True)
         config.logDataFormat = {
             "quaternion": "quaternion" in requested,
             "rotation_vector": "rotation_vector" in requested,
