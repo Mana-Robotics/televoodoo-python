@@ -35,7 +35,7 @@ Copy `xarm_config.json` and adapt it for your setup:
     "name": "myXarm",
     "code": "CDE456"
   },
-  "targetFrameDegrees": {
+  "targetFramePose": {
     "x": 0,
     "y": 0,
     "z": 0,
@@ -51,7 +51,7 @@ Copy `xarm_config.json` and adapt it for your setup:
 
 ### Target Frame
 
-Use `targetFrameDegrees` to align the ArUco reference marker (to be scanned with Televooodoo App) with your robot. For example, a ceiling-mounted robot might need `"y_rot_deg": 180`.
+Use `targetFramePose` to align the ArUco reference marker (to be scanned with Televooodoo App) with your robot. For example, a ceiling-mounted robot might need `"y_rot_deg": 180`.
 
 ### TCP Velocity Limit
 

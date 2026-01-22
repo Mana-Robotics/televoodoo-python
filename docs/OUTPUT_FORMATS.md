@@ -1,32 +1,36 @@
-# Output Formats
+# CLI Log Output Data
 
-Televoodoo events can include multiple pose representations (raw input, deltas, and transformed variants). This document explains the available formats and how to enable them.
+When running `python -m televoodoo`, the CLI outputs JSON pose data to stdout. The `logData` configuration controls which data is included in this output.
 
-## Available Formats
+> **Note**: This setting only affects CLI log output. When using the library programmatically, use `PoseProvider.get_delta()`, `PoseProvider.get_absolute()`, or `PoseProvider.get_velocity()` instead—these methods always return their respective data regardless of `logData`.
 
-| Format | Description | Use Case |
-|--------|-------------|----------|
+## Available Data
+
+| Data | Description | Use Case |
+|------|-------------|----------|
 | `absolute_input` | Raw pose from phone (in marker frame) | Debugging, recording |
 | `delta_input` | Change since first pose (in marker frame) | Understanding raw deltas |
 | `absolute_transformed` | Pose transformed to target frame | Digital twins, visualization |
-| `delta_transformed` | Delta transformed to target frame | **Robot control** |
+| `delta_transformed` | Delta transformed to target frame | Robot control |
+| `velocity` | Linear and angular velocities | Velocity-based robot control |
 
-## Enabling Formats
+## Configuring Log Output
 
-Configure which formats are included in your [config file](CONFIGURATION.md):
+Configure which data is included in CLI output via your [config file](CONFIGURATION.md):
 
 ```json
 {
-  "includeFormats": {
+  "logData": {
     "absolute_input": true,
     "delta_input": false,
     "absolute_transformed": true,
-    "delta_transformed": true
+    "delta_transformed": true,
+    "velocity": false
   }
 }
 ```
 
-## Format Details
+## Data Details
 
 ### absolute_input
 
@@ -68,7 +72,7 @@ The change in pose since the first pose (or since `movement_start=True`), in the
 
 ### absolute_transformed
 
-The pose transformed to your target frame, as defined by `targetFrameDegrees`, `scale`, and `outputAxes` in your config.
+The pose transformed to your target frame, as defined by `targetFramePose`, `scale`, and `outputAxes` in your config.
 
 ```python
 {
@@ -110,13 +114,32 @@ The delta transformed to your target frame — **recommended for robot control**
 
 **When to use**: Robot teleoperation, any application needing relative movements.
 
-## Using PoseProvider
+### velocity
 
-The `PoseProvider` class simplifies accessing the most common formats:
+Linear and angular velocities computed from consecutive poses.
+
+```python
+{
+    "movement_start": False,
+    "vx": 0.15,
+    "vy": -0.08,
+    "vz": 0.02,
+    "wx": 0.05,
+    "wy": -0.02,
+    "wz": 0.01,
+    "dt": 0.016
+}
+```
+
+**When to use**: Velocity-based robot control (e.g., xArm `set_cartesian_velo_continuous`).
+
+## Programmatic Use (Recommended)
+
+For programmatic use, the `PoseProvider` class provides direct access methods that are independent of `logData`:
 
 ### get_delta()
 
-Returns the transformed delta (equivalent to `delta_transformed`):
+Returns the transformed delta (same data as `delta_transformed`):
 
 ```python
 from televoodoo import PoseProvider, load_config
@@ -132,7 +155,7 @@ def handler(evt):
 
 ### get_absolute()
 
-Returns the transformed absolute pose (equivalent to `absolute_transformed`):
+Returns the transformed absolute pose (same data as `absolute_transformed`):
 
 ```python
 def handler(evt):
@@ -141,14 +164,26 @@ def handler(evt):
         update_visualization(pose['x'], pose['y'], pose['z'])
 ```
 
-## Orientation Formats
+### get_velocity()
 
-Control which orientation representations are included:
+Returns linear and angular velocities (same data as `velocity`):
+
+```python
+def handler(evt):
+    vel = pose_provider.get_velocity(evt)
+    if vel:
+        robot.set_velocity(vel['vx'], vel['vy'], vel['vz'])
+```
+
+## Log Data Format (Orientation)
+
+Controls which orientation formats are included in CLI log output. This only affects `python -m televoodoo` JSON output—`PoseProvider` methods always include all orientation formats.
 
 ```json
 {
-  "includeOrientation": {
+  "logDataFormat": {
     "quaternion": true,
+    "rotation_vector": true,
     "euler_radian": false,
     "euler_degree": true
   }
@@ -158,48 +193,51 @@ Control which orientation representations are included:
 | Format | Fields | Description |
 |--------|--------|-------------|
 | `quaternion` | `qx`, `qy`, `qz`, `qw` | Quaternion — best for 3D math |
-| `euler_radian` | `rx`, `ry`, `rz` | Rotation vector in radians |
-| `euler_degree` | `rx_deg`, `ry_deg`, `rz_deg` | Euler angles in degrees |
+| `rotation_vector` | `rx`, `ry`, `rz` | Rotation vector (axis-angle, radians) |
+| `euler_radian` | `x_rot`, `y_rot`, `z_rot` | Euler angles in radians |
+| `euler_degree` | `x_rot_deg`, `y_rot_deg`, `z_rot_deg` | Euler angles in degrees |
 
-> **Recommendation**: Always include `quaternion` for robust 3D calculations. Add Euler angles only if your application specifically needs them.
+## Example: Minimal CLI Log Output
 
-## Example: Robot Control Config
-
-A minimal config optimized for robot teleoperation:
+A config that only logs delta_transformed (useful when piping to another process):
 
 ```json
 {
-  "includeFormats": {
+  "logData": {
     "absolute_input": false,
     "delta_input": false,
     "absolute_transformed": false,
-    "delta_transformed": true
+    "delta_transformed": true,
+    "velocity": false
   },
-  "includeOrientation": {
+  "logDataFormat": {
     "quaternion": true,
+    "rotation_vector": true,
     "euler_radian": true,
     "euler_degree": false
   },
-  "targetFrameDegrees": {
+  "targetFramePose": {
     "z_rot_deg": 90
   }
 }
 ```
 
-## Example: Recording Config
+## Example: Full Recording Config
 
-A config for recording raw data:
+A config that logs all data for debugging or data recording:
 
 ```json
 {
-  "includeFormats": {
+  "logData": {
     "absolute_input": true,
     "delta_input": true,
     "absolute_transformed": true,
-    "delta_transformed": true
+    "delta_transformed": true,
+    "velocity": true
   },
-  "includeOrientation": {
+  "logDataFormat": {
     "quaternion": true,
+    "rotation_vector": true,
     "euler_radian": true,
     "euler_degree": true
   }

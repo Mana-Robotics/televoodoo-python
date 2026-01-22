@@ -62,6 +62,8 @@ class PoseProvider:
         - x, y, z: Absolute position (scaled per config)
         - qx, qy, qz, qw: Orientation as quaternion
         - rx, ry, rz: Orientation as rotation vector (radians)
+        - x_rot, y_rot, z_rot: Euler angles (radians)
+        - x_rot_deg, y_rot_deg, z_rot_deg: Euler angles (degrees)
 
         Args:
             evt: Event dictionary from Televoodoo callback.
@@ -105,31 +107,28 @@ class PoseProvider:
         rx, ry, rz = tvm.quat_to_rotvec(qrel)
         result.update({"rx": rx, "ry": ry, "rz": rz})
 
-        # Add Euler angles if configured
-        if self.config.includeOrientation.get("euler_radian"):
-            xr, yr, zr = self._quat_to_euler_xyz(qrel)
-            result.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
-        if self.config.includeOrientation.get("euler_degree"):
-            xr, yr, zr = self._quat_to_euler_xyz(qrel)
-            result.update({
-                "x_rot_deg": (xr * 180.0 / math.pi),
-                "y_rot_deg": (yr * 180.0 / math.pi),
-                "z_rot_deg": (zr * 180.0 / math.pi),
-            })
+        # Add Euler angles (radians and degrees)
+        xr, yr, zr = self._quat_to_euler_xyz(qrel)
+        result.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+        result.update({
+            "x_rot_deg": (xr * 180.0 / math.pi),
+            "y_rot_deg": (yr * 180.0 / math.pi),
+            "z_rot_deg": (zr * 180.0 / math.pi),
+        })
 
         return result
 
     def get_delta(self, evt: Dict[str, Any]) -> Dict[str, Any] | None:
         """Get transformed delta directly from a teleoperation event.
 
-        This is a convenience method for robot control that always computes
-        and returns the delta, regardless of the config's includeFormats setting.
-
         The returned delta contains:
+        - movement_start: True if this is a new movement origin
         - dx, dy, dz: Position delta (scaled per config)
         - dqx, dqy, dqz, dqw: Rotation delta as quaternion
         - rx, ry, rz: Rotation delta as rotation vector (radians)
-        - movement_start: True if this is a new movement origin
+        - x_rot, y_rot, z_rot: Rotation delta as Euler angles (radians)
+        - x_rot_deg, y_rot_deg, z_rot_deg: Rotation delta as Euler angles (degrees)
+        - qx, qy, qz, qw: Current absolute orientation as quaternion
 
         Args:
             evt: Event dictionary from Televoodoo callback.
@@ -186,6 +185,15 @@ class PoseProvider:
         # Rotation delta as rotation vector (axis-angle, radians)
         drx, dry, drz = tvm.quat_to_rotvec(q_delta)
         delta.update({"rx": drx, "ry": dry, "rz": drz})
+
+        # Rotation delta as Euler angles (radians and degrees)
+        xr, yr, zr = self._quat_to_euler_xyz(q_delta)
+        delta.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
+        delta.update({
+            "x_rot_deg": (xr * 180.0 / math.pi),
+            "y_rot_deg": (yr * 180.0 / math.pi),
+            "z_rot_deg": (zr * 180.0 / math.pi),
+        })
 
         # Include current absolute orientation for convenience
         delta.update({
@@ -366,18 +374,22 @@ class PoseProvider:
         return (tx, ty, tz), (tqx, tqy, tqz, tqw)
 
     def transform(self, pose: Pose) -> Dict[str, Any]:
-        """Transform a pose according to the configuration.
+        """Transform a pose and return data for CLI log output.
+
+        This method is used internally by `python -m televoodoo` to produce
+        JSON output. For programmatic use, prefer get_delta(), get_absolute(),
+        or get_velocity() instead.
 
         Args:
             pose: Input pose from the phone/tracker.
 
         Returns:
-            Dictionary with requested output formats. May include:
+            Dictionary with data enabled in config.logData:
             - absolute_input: Raw pose data
             - delta_input: Position delta from origin (raw frame)
             - absolute_transformed: Pose in target frame
-            - delta_transformed: Position and rotation deltas in target frame,
-              including rotation vector (rx, ry, rz) in radians for robot APIs.
+            - delta_transformed: Position and rotation deltas in target frame
+            - velocity: Linear and angular velocities
         """
         # Reset origin on movement_start
         if pose.movement_start:
@@ -388,17 +400,27 @@ class PoseProvider:
             "x": pose.x,
             "y": pose.y,
             "z": pose.z,
-            "qx": pose.qx,
-            "qy": pose.qy,
-            "qz": pose.qz,
-            "qw": pose.qw,
         }
 
+        # Add quaternion if configured (default True)
+        if self.config.logDataFormat.get("quaternion", True):
+            absolute_input.update({
+                "qx": pose.qx,
+                "qy": pose.qy,
+                "qz": pose.qz,
+                "qw": pose.qw,
+            })
+
+        # Add rotation vector
+        rx, ry, rz = tvm.quat_to_rotvec((pose.qx, pose.qy, pose.qz, pose.qw))
+        if self.config.logDataFormat.get("rotation_vector"):
+            absolute_input.update({"rx": rx, "ry": ry, "rz": rz})
+
         # Compute Euler angles from quaternion if requested
-        if self.config.includeOrientation.get("euler_radian"):
+        if self.config.logDataFormat.get("euler_radian"):
             xr, yr, zr = self._quat_to_euler_xyz((pose.qx, pose.qy, pose.qz, pose.qw))
             absolute_input.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
-        if self.config.includeOrientation.get("euler_degree"):
+        if self.config.logDataFormat.get("euler_degree"):
             xr, yr, zr = self._quat_to_euler_xyz((pose.qx, pose.qy, pose.qz, pose.qw))
             absolute_input.update({
                 "x_rot_deg": (xr * 180.0 / math.pi),
@@ -431,20 +453,26 @@ class PoseProvider:
             "x": self._apply_scale(tposx * self.config.outputAxes.get("x", 1)),
             "y": self._apply_scale(tposy * self.config.outputAxes.get("y", 1)),
             "z": self._apply_scale(tposz * self.config.outputAxes.get("z", 1)),
-            "qx": qrel[0],
-            "qy": qrel[1],
-            "qz": qrel[2],
-            "qw": qrel[3],
         }
+
+        # Add quaternion if configured (default True)
+        if self.config.logDataFormat.get("quaternion", True):
+            absolute_transformed.update({
+                "qx": qrel[0],
+                "qy": qrel[1],
+                "qz": qrel[2],
+                "qw": qrel[3],
+            })
 
         # Add rotation vector (axis-angle) representation
         rx, ry, rz = tvm.quat_to_rotvec(qrel)
-        absolute_transformed.update({"rx": rx, "ry": ry, "rz": rz})
+        if self.config.logDataFormat.get("rotation_vector"):
+            absolute_transformed.update({"rx": rx, "ry": ry, "rz": rz})
 
-        if self.config.includeOrientation.get("euler_radian"):
+        if self.config.logDataFormat.get("euler_radian"):
             xr, yr, zr = self._quat_to_euler_xyz(qrel)
             absolute_transformed.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
-        if self.config.includeOrientation.get("euler_degree"):
+        if self.config.logDataFormat.get("euler_degree"):
             xr, yr, zr = self._quat_to_euler_xyz(qrel)
             absolute_transformed.update({
                 "x_rot_deg": (xr * 180.0 / math.pi),
@@ -476,24 +504,28 @@ class PoseProvider:
             # Compute delta quaternion (base frame convention: q_delta = q_current * inv(q_origin))
             q_delta = tvm.quat_delta(origin_q_target, current_q_target, frame="base")
 
-            delta_transformed.update({
-                "dqx": q_delta[0],
-                "dqy": q_delta[1],
-                "dqz": q_delta[2],
-                "dqw": q_delta[3],
-            })
+            # Add delta quaternion if configured (default True)
+            if self.config.logDataFormat.get("quaternion", True):
+                delta_transformed.update({
+                    "dqx": q_delta[0],
+                    "dqy": q_delta[1],
+                    "dqz": q_delta[2],
+                    "dqw": q_delta[3],
+                })
 
             # Rotation delta as rotation vector (axis-angle, radians)
             drx, dry, drz = tvm.quat_to_rotvec(q_delta)
-            delta_transformed.update({"rx": drx, "ry": dry, "rz": drz})
+            if self.config.logDataFormat.get("rotation_vector"):
+                delta_transformed.update({"rx": drx, "ry": dry, "rz": drz})
 
             # Current absolute orientation (for convenience)
-            delta_transformed.update({"qx": qrel[0], "qy": qrel[1], "qz": qrel[2], "qw": qrel[3]})
+            if self.config.logDataFormat.get("quaternion", True):
+                delta_transformed.update({"qx": qrel[0], "qy": qrel[1], "qz": qrel[2], "qw": qrel[3]})
 
-            if self.config.includeOrientation.get("euler_radian"):
+            if self.config.logDataFormat.get("euler_radian"):
                 xr, yr, zr = self._quat_to_euler_xyz(qrel)
                 delta_transformed.update({"x_rot": xr, "y_rot": yr, "z_rot": zr})
-            if self.config.includeOrientation.get("euler_degree"):
+            if self.config.logDataFormat.get("euler_degree"):
                 xr, yr, zr = self._quat_to_euler_xyz(qrel)
                 delta_transformed.update({
                     "x_rot_deg": (xr * 180.0 / math.pi),
@@ -502,12 +534,27 @@ class PoseProvider:
                 })
 
         result: Dict[str, Any] = {}
-        if self.config.includeFormats.get("absolute_input"):
+        if self.config.logData.get("absolute_input"):
             result["absolute_input"] = absolute_input
-        if self.config.includeFormats.get("delta_input") and delta_input is not None:
+        if self.config.logData.get("delta_input") and delta_input is not None:
             result["delta_input"] = delta_input
-        if self.config.includeFormats.get("absolute_transformed"):
+        if self.config.logData.get("absolute_transformed"):
             result["absolute_transformed"] = absolute_transformed
-        if self.config.includeFormats.get("delta_transformed") and delta_transformed is not None:
+        if self.config.logData.get("delta_transformed") and delta_transformed is not None:
             result["delta_transformed"] = delta_transformed
+        if self.config.logData.get("velocity"):
+            # Build a synthetic event dict for get_velocity (must match teleop event format)
+            evt = {
+                "type": "pose",
+                "data": {
+                    "absolute_input": {
+                        "movement_start": pose.movement_start,
+                        "x": pose.x, "y": pose.y, "z": pose.z,
+                        "qx": pose.qx, "qy": pose.qy, "qz": pose.qz, "qw": pose.qw,
+                    }
+                }
+            }
+            velocity = self.get_velocity(evt)
+            if velocity is not None:
+                result["velocity"] = velocity
         return result

@@ -1,20 +1,22 @@
 {
     "authCredentials": {
-      "name": "myrobot",
+      "name": "myvoodoo",
       "code": "ABC123"
     },
     "upsample_to_frequency_hz": null,
     "rate_limit_frequency_hz": null,
-    "includeFormats": {
+    "logData": {
       "absolute_input": true,
       "delta_input": false,
-      "absolute_transformed": true,
-      "delta_transformed": true
+      "absolute_transformed": false,
+      "delta_transformed": false,
+      "velocity": false
     },
-    "includeOrientation": {
+    "logDataFormat": {
       "quaternion": true,
+      "rotation_vector": false,
       "euler_radian": false,
-      "euler_degree": true
+      "euler_degree": false
     },
     "scale": 1.0,
     "outputAxes": {
@@ -22,7 +24,7 @@
       "y": 1,
       "z": -1
     },
-    "targetFrameDegrees": {
+    "targetFramePose": {
       "x": 0.0,
       "y": 0.0,
       "z": 0.5,

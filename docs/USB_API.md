@@ -101,7 +101,7 @@ sudo systemctl start usbmuxd
 televoodoo --connection usb
 
 # USB with static credentials
-televoodoo --connection usb --name myrobot --code ABC123
+televoodoo --connection usb --name myvoodoo --code ABC123
 ```
 
 ---
@@ -122,7 +122,7 @@ start_televoodoo(callback=on_event, connection="usb")
 start_televoodoo(
     callback=on_event,
     connection="usb",
-    name="myrobot",
+    name="myvoodoo",
     code="ABC123",
 )
 ```
@@ -135,14 +135,14 @@ The QR code uses a minimal format with mDNS discovery:
 
 ```json
 {
-  "name": "myrobot",
+  "name": "myvoodoo",
   "code": "ABC123",
   "transport": "usb"
 }
 ```
 
 The phone app uses the `name` to discover the service via mDNS:
-- Service: `myrobot._televoodoo._udp.local.`
+- Service: `myvoodoo._televoodoo._udp.local.`
 
 No IP address is included — mDNS handles discovery on whatever network interface the phone is connected to.
 

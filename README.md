@@ -81,7 +81,7 @@ televoodoo
 televoodoo --connection wifi
 
 # Set static credentials -> You only need to scan it with app once
-televoodoo --name myrobot --code ABC123
+televoodoo --name myvoodoo --code ABC123
 ```
 
 **Or as Python App**

@@ -2,8 +2,9 @@
 
 Usage:
     python -m televoodoo [--name NAME] [--code CODE] [--config CONFIG]
-    python -m televoodoo --transport wifi [--wifi-port 50000]
-    python -m televoodoo --transport usb [--wifi-port 50000]
+    python -m televoodoo --connection wifi [--wifi-port 50000]
+    python -m televoodoo --connection usb
+    python -m televoodoo --log-data delta_transformed,velocity --log-format quaternion,euler_degree
 """
 
 import argparse
@@ -13,6 +14,7 @@ import threading
 import time
 
 from televoodoo import start_televoodoo, PoseProvider, load_config
+from televoodoo.pose import Pose
 from televoodoo.ble import run_simulation
 
 
@@ -92,13 +94,54 @@ def main() -> int:
         default=None,
         help="Maximum acceleration in m/s² (symmetric, applies to deceleration too)",
     )
+    parser.add_argument(
+        "--log-data",
+        type=str,
+        default=None,
+        help="Comma-separated list of data to log: absolute_input,delta_input,absolute_transformed,delta_transformed,velocity",
+    )
+    parser.add_argument(
+        "--log-format",
+        type=str,
+        default=None,
+        help="Comma-separated list of orientation formats to log: quaternion,rotation_vector,euler_radian,euler_degree",
+    )
     args = parser.parse_args()
 
     # Load config from file if specified, otherwise use defaults
     config = load_config(args.config if args.config else None)
+
+    # Override logData from CLI if specified
+    if args.log_data is not None:
+        requested = set(args.log_data.split(",")) if args.log_data else set()
+        config.logData = {
+            "absolute_input": "absolute_input" in requested,
+            "delta_input": "delta_input" in requested,
+            "absolute_transformed": "absolute_transformed" in requested,
+            "delta_transformed": "delta_transformed" in requested,
+            "velocity": "velocity" in requested,
+        }
+
+    # Override logDataFormat from CLI if specified
+    if args.log_format is not None:
+        requested = set(args.log_format.split(",")) if args.log_format else set()
+        config.logDataFormat = {
+            "quaternion": "quaternion" in requested,
+            "rotation_vector": "rotation_vector" in requested,
+            "euler_radian": "euler_radian" in requested,
+            "euler_degree": "euler_degree" in requested,
+        }
+
     pose_provider = PoseProvider(config)
 
-    def on_pose(pose):
+    def on_pose(evt):
+        # evt is an event dict like {"type": "pose", "data": {"absolute_input": {...}}}
+        if args.quiet:
+            return  # Suppress pose output in quiet mode
+        # Convert to Pose object for transform()
+        pose = Pose.from_teleop_event(evt)
+        if pose is None:
+            return  # Not a pose event
         out = pose_provider.transform(pose)
         print(json.dumps({"type": "pose", "data": out}), flush=True)
 
@@ -129,7 +172,7 @@ def main() -> int:
             name=args.name or config.auth_name,
             code=args.code or config.auth_code,
             connection=args.connection,
-            quiet=args.quiet,
+            quiet=True,  # Suppress raw pose output; callback handles transformed output
             wifi_port=args.wifi_port,
             config=config,  # Pass config for settings from config file
             upsample_to_hz=args.upsample_hz,  # CLI args override config

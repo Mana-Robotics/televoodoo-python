@@ -148,10 +148,10 @@ televoodoo --connection usb    # USB tethering (lowest latency)
 televoodoo --connection ble    # Bluetooth
 
 # Set static credentials (scan once, reuse)
-televoodoo --name myrobot --code ABC123
+televoodoo --name myvoodoo --code ABC123
 
 # Combine options
-televoodoo --connection usb --name myrobot --code ABC123 --quiet
+televoodoo --connection usb --name myvoodoo --code ABC123 --quiet
 ```
 
 ### Available Flags
@@ -173,7 +173,7 @@ from televoodoo import start_televoodoo
 start_televoodoo(
     callback=handle_pose,           # Required: your pose handler
     connection="wifi",              # "wifi" (default), "usb", or "ble"
-    name="myrobot",                 # Custom name (None = random)
+    name="myvoodoo",                 # Custom name (None = random)
     code="ABC123",                  # Custom code (None = random)
     quiet=True,                     # Suppress logging
     upsample_to_hz=200.0,           # Upsample frequency ⚠️ experimental

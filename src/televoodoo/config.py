@@ -13,8 +13,11 @@ class OutputConfig:
     """Configuration for pose transformation and output formatting.
     
     Attributes:
-        includeFormats: Which output formats to include (absolute_input, delta_input, etc.)
-        includeOrientation: Which orientation formats to include (quaternion, euler_radian, euler_degree)
+        logData: Which data to include in CLI log output (absolute_input, delta_input, velocity, etc.)
+            Only affects `python -m televoodoo` JSON output; has no effect on PoseProvider methods
+            like get_delta(), get_absolute(), or get_velocity().
+        logDataFormat: Which orientation formats to include in CLI log output (quaternion, rotation_vector, euler_radian, euler_degree).
+            Only affects `python -m televoodoo` JSON output; PoseProvider methods always include all formats.
         scale: Scale factor applied to position values
         outputAxes: Axis multipliers for output (can flip axes with -1)
         targetFrame: Pose of target coordinate system relative to reference/world (Euler radians)
@@ -25,8 +28,8 @@ class OutputConfig:
         vel_limit: Maximum velocity in m/s (position limiting for safety)
         acc_limit: Maximum acceleration in m/s² (symmetric, applies to deceleration too)
     """
-    includeFormats: Dict[str, bool]
-    includeOrientation: Dict[str, bool]
+    logData: Dict[str, bool]
+    logDataFormat: Dict[str, bool]
     scale: float
     outputAxes: Dict[str, float]
     # Pose of Target Coordinate System relative to reference/world (Euler radians)
@@ -60,14 +63,16 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
     """
     if not path:
         return OutputConfig(
-            includeFormats={
+            logData={
                 "absolute_input": True,
                 "delta_input": False,
-                "absolute_transformed": True,
+                "absolute_transformed": False,
                 "delta_transformed": False,
+                "velocity": False,
             },
-            includeOrientation={
+            logDataFormat={
                 "quaternion": True,
+                "rotation_vector": False,
                 "euler_radian": False,
                 "euler_degree": False,
             },
@@ -95,7 +100,7 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
 
     data: Dict[str, Any] = json.loads(p.read_text())
 
-    tf_deg = data.get("targetFrameDegrees")
+    tf_deg = data.get("targetFramePose")
     targetFrame = None
     if tf_deg:
         targetFrame = {
@@ -131,18 +136,28 @@ def load_config(path: Optional[str] = None) -> OutputConfig:
     acc_limit = float(acc_limit_raw) if acc_limit_raw is not None else None
 
     return OutputConfig(
-        includeFormats=data.get(
-            "includeFormats",
-            {
-                "absolute_input": True,
-                "delta_input": False,
-                "absolute_transformed": True,
-                "delta_transformed": False,
-            },
+        logData=data.get(
+            "logData",
+            data.get(  # Backwards compatibility: fall back to old names
+                "logFormats",
+                data.get(
+                    "includeFormats",
+                    {
+                        "absolute_input": True,
+                        "delta_input": False,
+                        "absolute_transformed": False,
+                        "delta_transformed": False,
+                        "velocity": False,
+                    },
+                ),
+            ),
         ),
-        includeOrientation=data.get(
-            "includeOrientation",
-            {"quaternion": True, "euler_radian": False, "euler_degree": False},
+        logDataFormat=data.get(
+            "logDataFormat",
+            data.get(  # Backwards compatibility: fall back to old name
+                "includeOrientation",
+                {"quaternion": True, "rotation_vector": False, "euler_radian": False, "euler_degree": False},
+            ),
         ),
         scale=float(data.get("scale", 1.0)),
         outputAxes=data.get("outputAxes", {"x": 1.0, "y": 1.0, "z": 1.0}),

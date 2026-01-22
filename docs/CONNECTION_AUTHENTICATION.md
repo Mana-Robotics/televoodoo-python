@@ -80,13 +80,13 @@ Set fixed credentials for development or ongoing projects:
 **Via CLI:**
 
 ```bash
-televoodoo --name myrobot --code ABC123
+televoodoo --name myvoodoo --code ABC123
 ```
 
 **Via Python:**
 
 ```python
-start_televoodoo(callback=handler, name="myrobot", code="ABC123")
+start_televoodoo(callback=handler, name="myvoodoo", code="ABC123")
 ```
 
 **Via Config File:**
@@ -94,7 +94,7 @@ start_televoodoo(callback=handler, name="myrobot", code="ABC123")
 ```json
 {
   "authCredentials": {
-    "name": "myrobot",
+    "name": "myvoodoo",
     "code": "ABC123"
   }
 }

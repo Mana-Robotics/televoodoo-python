@@ -3,7 +3,7 @@
     "name": "myXarm",
     "code": "CDE456"
   },
-  "targetFrameDegrees": {
+  "targetFramePose": {
     "x": 0,
     "y": 0,
     "z": 0,
