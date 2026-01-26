@@ -10,6 +10,19 @@
 - **[Televoodoo App](mailto:hello@mana-robotics.com?subject=Televoodoo%20App%3A%20Request%20for%20Test%20Access)** (iOS, Android) — 6DoF tracking phone app that streams poses at low latency via WiFi, USB, or BLE
 - **[Televoodoo Viewer](https://github.com/Mana-Robotics/televoodoo-viewer)** — Cross-platform desktop app for visual testing and config file creation 
 
+
+## ⚠️ **Legal & Safety Disclaimer**
+ 
+
+> Televoodoo is a software tool intended **for research and development purposes only**. It is **not production-ready** and **not safety-certified**. Errors in pose tracking, perception, planning, and robot control may occur and can lead to unexpected or unsafe behavior. 
+>
+> The software is provided **“as is”**, without warranty of any kind. The authors and contributors assume **no responsibility or liability** for any damages, including material damage, personal injury, or loss of life resulting from the use or misuse of this software. 
+>
+>Use of Televoodoo requires a **trained and responsible operator** with experience in robotics programming and system integration. The user is solely responsible for performing a proper **risk assessment** and ensuring a safe overall system design. 
+>
+>Televoodoo must **only be used with collaborative robots (cobots)** equipped with collision detection and safety features.  **DO NOT USE with industrial robot arms.**
+
+
 ## Why Televoodoo?
 
 Traditional 6DoF controllers either limit the motions you can generate (e.g., a 3D mouse) or require expensive hardware (e.g., VR controllers). Meanwhile, we all carry a capable 6DoF controller in our pocket—our phone. Let's make use of that.

@@ -2,6 +2,14 @@
 
 Teleoperate a UFACTORY xArm end-effector pose using a smartphone as a 6DoF controller.
 
+## Legal & Safety
+
+> ⚠️ **Safety Notice**
+> 
+> See the [Legal & Safety Disclaimer](../../README.md#legal--safety-disclaimer) before using this software on real hardware.
+>
+> Executing this code can move a real robot. Configure speed and acceleration limits, keep the workspace clear and keep an E-stop accessible.
+
 ## Control Modes
 
 You **must** specify a control mode via `--mode`. Available modes:
@@ -20,10 +28,6 @@ This example:
 
 - **xArm SDK**: `pip install xarm-python-sdk`
 - **Robot**: UFACTORY xArm / Lite6 reachable via IP on your LAN
-
-## Safety
-
-⚠️ This can move a real robot. Configure speed and acceleration limits, keep the workspace clear and keep an E-stop accessible.
 
 ## Configuration
 
