@@ -56,7 +56,7 @@ Traditional 6DoF controllers either limit the motions you can generate (e.g., a 
 |----------|----------------|-----|-----|
 | **macOS** | ✅ Works out of box | ✅ Configure according to [USB API](docs/USB_API.md) | ✅ Dependencies are auto-installed |
 | **Ubuntu** | ✅ Works out of box | ✅ Configure according to [USB API](docs/USB_API.md) | ✅ Install `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev` |
-| **Windows** | ✅ Works out of box | ☑️ Not yet tested | ❌ Not supported |
+| **Windows** | ✅ Works out of box | ✅ Configure according to [USB API](docs/USB_API.md) | ❌ Not supported |
 
 ## Quick Start
 

@@ -83,6 +83,7 @@ No IP address is needed — mDNS handles discovery automatically.
 
 1. Connect Android phone via USB cable
 2. Enable **USB Tethering** on phone (Settings → Hotspot & Tethering)
+3. **Disable Wifi** on phone (if PC and phone are in same Wifi network the app will likely prefer to connect via Wifi, not USB)
 
 ### Ubuntu/Linux + iOS
 
@@ -91,6 +92,12 @@ No IP address is needed — mDNS handles discovery automatically.
 sudo apt install libimobiledevice6 usbmuxd
 sudo systemctl start usbmuxd
 ```
+
+### Windows + Android
+
+1. Connect Android phone via USB cable
+2. **Enable USB Tethering** on phone (Settings → Hotspot & Tethering)
+3. **Disable Wifi** on phone (if PC and phone are in same Wifi network the app will likely prefer to connect via Wifi, not USB)
 
 ---
 
