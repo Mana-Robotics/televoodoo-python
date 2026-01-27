@@ -30,6 +30,9 @@ def haptic_simulation_loop():
     Runs in a background thread and sends haptic feedback to the iOS app.
     The sine wave oscillates between 0.0 and 1.0 with a 3-second period.
     """
+    # Wait for QR code to be printed before starting display updates
+    time.sleep(1.0)
+    
     start_time = time.monotonic()
     
     while True:

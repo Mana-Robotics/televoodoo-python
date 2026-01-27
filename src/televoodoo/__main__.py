@@ -2,7 +2,7 @@
 
 Usage:
     python -m televoodoo [--name NAME] [--code CODE] [--config CONFIG]
-    python -m televoodoo --connection wifi [--wifi-port 50000]
+    python -m televoodoo --connection wifi [--tcp-port 50000]
     python -m televoodoo --connection usb
     python -m televoodoo --log-data delta_transformed,velocity --log-format quaternion,euler_degree
 """
@@ -16,6 +16,7 @@ import time
 from televoodoo import start_televoodoo, PoseProvider, load_config
 from televoodoo.pose import Pose
 from televoodoo.ble import run_simulation
+from televoodoo.tcp_service import DEFAULT_TCP_PORT, DEFAULT_BEACON_PORT
 
 
 def main() -> int:
@@ -48,10 +49,16 @@ def main() -> int:
         help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
     )
     parser.add_argument(
-        "--wifi-port",
+        "--tcp-port",
         type=int,
-        default=50000,
-        help="UDP port for WIFI server (default: 50000)",
+        default=DEFAULT_TCP_PORT,
+        help=f"TCP port for data (default: {DEFAULT_TCP_PORT})",
+    )
+    parser.add_argument(
+        "--beacon-port",
+        type=int,
+        default=DEFAULT_BEACON_PORT,
+        help=f"UDP port for beacon broadcast (default: {DEFAULT_BEACON_PORT})",
     )
     parser.add_argument(
         "--quiet",
@@ -167,19 +174,6 @@ def main() -> int:
         out = pose_provider.transform(pose)
         print(json.dumps({"type": "pose", "data": out}), flush=True)
 
-    # Heartbeat thread
-    def heartbeat():
-        counter = 0
-        while True:
-            counter += 1
-            print(
-                json.dumps({"type": "service_heartbeat", "counter": counter}),
-                flush=True,
-            )
-            time.sleep(1.0)
-
-    threading.Thread(target=heartbeat, daemon=True).start()
-
     if args.simulate:
         # Run simulation without phone connection
         run_simulation(on_pose)
@@ -195,7 +189,8 @@ def main() -> int:
             code=args.code or config.auth_code,
             connection=args.connection,
             quiet=True,  # Suppress raw pose output; callback handles transformed output
-            wifi_port=args.wifi_port,
+            tcp_port=args.tcp_port,
+            beacon_port=args.beacon_port,
             config=config,  # Pass config for settings from config file
             upsample_to_hz=args.upsample_hz,  # CLI args override config
             rate_limit_hz=args.rate_limit_hz,

@@ -42,6 +42,7 @@ def run_peripheral(
     code: str,
     callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     quiet: bool = False,
+    initial_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Run the BLE peripheral for phone app connection.
 
@@ -53,6 +54,7 @@ def run_peripheral(
         code: Authentication code (phone must provide this to connect)
         callback: Function called for each event (pose, connection status, etc.)
         quiet: Suppress high-frequency logging
+        initial_config: Initial configuration to send to phone after connection
 
     Raises:
         RuntimeError: If BLE is not supported on this platform.
@@ -79,7 +81,7 @@ def run_peripheral(
             _mac.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _mac.run_macos_peripheral(name, code, callback, register_ble_haptic_sender)
+        _mac.run_macos_peripheral(name, code, callback, register_ble_haptic_sender, initial_config)
 
     elif system == "linux" and distro == "ubuntu":
         import televoodoo.ble_peripheral_ubuntu as _ubu  # type: ignore
@@ -88,7 +90,7 @@ def run_peripheral(
             _ubu.QUIET_HIGH_FREQUENCY = bool(quiet)  # type: ignore[attr-defined]
         except Exception:
             pass
-        _ubu.run_ubuntu_peripheral(name, code, callback, register_ble_haptic_sender)
+        _ubu.run_ubuntu_peripheral(name, code, callback, register_ble_haptic_sender, initial_config)
 
     else:
         raise RuntimeError(
@@ -116,9 +118,6 @@ def simulate_pose_stream() -> Iterator[Pose]:
             x=0.1 * random.uniform(-1, 1),
             y=0.1 * random.uniform(-1, 1),
             z=0.1 * random.uniform(-1, 1),
-            x_rot=0.0,
-            y_rot=0.0,
-            z_rot=0.0,
             qx=0.0,
             qy=0.0,
             qz=0.0,

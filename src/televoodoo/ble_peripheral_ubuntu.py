@@ -14,6 +14,7 @@ from bluezero import adapter, peripheral  # type: ignore
 
 from . import protocol
 
+# Service and characteristic UUIDs (as per Multi-transport-spec.md)
 SERVICE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF61"
 CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
 CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
@@ -21,6 +22,7 @@ CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 CHAR_HAPTIC_UUID = "1C8FD138-FC18-4846-954D-E509366AEF67"
+CHAR_CONFIG_UUID = "1C8FD138-FC18-4846-954D-E509366AEF68"
 
 # Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
@@ -46,7 +48,13 @@ def emit_event(evt: Dict[str, Any]) -> None:
 
 
 class UbuntuPeripheral:
-    def __init__(self, name: str, expected_code: str, haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None):
+    def __init__(
+        self, 
+        name: str, 
+        expected_code: str, 
+        haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None,
+        initial_config: Optional[Dict[str, Any]] = None,
+    ):
         self.name = name
         self.expected_code = expected_code
         self.heartbeat_counter = 0
@@ -54,6 +62,8 @@ class UbuntuPeripheral:
         self._hb_thread: Optional[threading.Thread] = None
         self._haptic_sender_cb = haptic_sender_cb
         self._latest_haptic: bytes = protocol.pack_haptic(0.0)
+        self._initial_config = initial_config or {}
+        self._current_config: bytes = protocol.pack_config(self._initial_config) if self._initial_config else protocol.pack_config({})
 
         # Adapter
         adpts = list(adapter.Adapter.available())
@@ -76,6 +86,7 @@ class UbuntuPeripheral:
         self.pose_id = 4
         self.cmd_id = 5
         self.haptic_id = 6
+        self.config_id = 7
 
         self.ble.add_service(srv_id=self.srv_id, uuid=SERVICE_UUID, primary=True)
 
@@ -147,6 +158,18 @@ class UbuntuPeripheral:
             notify_callback=self._haptic_notify,
         )
 
+        # Config (read/notify) - as per Multi-transport-spec.md
+        self.ble.add_characteristic(
+            srv_id=self.srv_id,
+            chr_id=self.config_id,
+            uuid=CHAR_CONFIG_UUID,
+            value=list(self._current_config),
+            notifying=False,
+            flags=['read', 'notify'],
+            read_callback=self._config_read,
+            notify_callback=self._config_notify,
+        )
+
         # Register haptic sender
         if self._haptic_sender_cb:
             def _send_haptic(intensity: float) -> bool:
@@ -165,6 +188,18 @@ class UbuntuPeripheral:
                 self._haptic_sender_cb(_send_haptic)
             except Exception:
                 pass
+
+    def update_config(self, config: Dict[str, Any]) -> bool:
+        """Update and notify config to connected centrals."""
+        try:
+            self._current_config = protocol.pack_config(config)
+            try:
+                self.ble.send_notify(self.srv_id, self.config_id)
+            except Exception:
+                pass
+            return True
+        except Exception:
+            return False
 
     def _hb_read(self) -> list[int]:
         """Handle heartbeat read - binary format."""
@@ -186,6 +221,14 @@ class UbuntuPeripheral:
     def _haptic_notify(self) -> list[int]:
         """Notify latest haptic packet."""
         return list(self._latest_haptic)
+
+    def _config_read(self) -> list[int]:
+        """Return current config packet."""
+        return list(self._current_config)
+
+    def _config_notify(self) -> list[int]:
+        """Notify current config packet."""
+        return list(self._current_config)
 
     def _auth_write(self, value: Any, options: Optional[Dict[str, Any]] = None) -> None:
         try:
@@ -316,6 +359,7 @@ def run_ubuntu_peripheral(
     expected_code: str,
     callback: Optional[Callable[[Dict[str, Any]], None]] = None,
     haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None,
+    initial_config: Optional[Dict[str, Any]] = None,
 ) -> None:
     global _evt_cb
     _evt_cb = callback
@@ -325,5 +369,5 @@ def run_ubuntu_peripheral(
     if not addr or 'miniforge' in addr or 'conda' in addr:
         os.environ['DBUS_SYSTEM_BUS_ADDRESS'] = 'unix:path=/var/run/dbus/system_bus_socket'
     
-    periph = UbuntuPeripheral(name, expected_code, haptic_sender_cb)
+    periph = UbuntuPeripheral(name, expected_code, haptic_sender_cb, initial_config)
     periph.start()

@@ -23,7 +23,7 @@ parser.add_argument(
     dest="connection",
     help="Connection type: 'auto' (default), 'ble', 'wifi', or 'usb'",
 )
-parser.add_argument("--wifi-port", type=int, default=50000, help="UDP port for WIFI")
+parser.add_argument("--tcp-port", type=int, default=50000, help="TCP port for data")
 parser.add_argument(
     "--upsample-hz",
     type=float,
@@ -413,7 +413,7 @@ start_televoodoo(
     callback=on_pose,
     quiet=True,
     connection=args.connection,
-    wifi_port=args.wifi_port,
+    tcp_port=args.tcp_port,
     upsample_to_hz=args.upsample_hz,
     regulated=regulated,
 )

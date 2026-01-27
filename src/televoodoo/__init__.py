@@ -3,6 +3,7 @@
 Main exports:
 - start_televoodoo: Start the connection and receive pose data
 - send_haptic: Send haptic feedback to the phone app
+- send_config: Send configuration updates to the phone app
 - PoseProvider: Get transformed poses from teleoperation events
 - Pose: Pose data structure
 - load_config: Load configuration from JSON file
@@ -16,7 +17,7 @@ from .resampler import PoseResampler
 from .motion_limiter import MotionLimiter
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
-from .udp_service import send_haptic
+from .tcp_service import send_haptic, send_config
 from . import math
 from . import protocol
 
@@ -24,6 +25,7 @@ __all__ = [
     # Main API
     "start_televoodoo",
     "send_haptic",
+    "send_config",
     "PoseProvider",
     "PoseResampler",
     "MotionLimiter",

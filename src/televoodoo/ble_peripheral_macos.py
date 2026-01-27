@@ -3,6 +3,7 @@
 import json
 import threading
 import time
+from typing import Any, Callable, Dict, Optional
 
 import objc
 from Foundation import NSObject, NSData, NSRunLoop
@@ -27,6 +28,7 @@ from CoreBluetooth import (
 
 from . import protocol
 
+# Service and characteristic UUIDs (as per Multi-transport-spec.md)
 SERVICE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF61"
 CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
 CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
@@ -34,6 +36,7 @@ CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
 CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
 CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
 CHAR_HAPTIC_UUID = "1C8FD138-FC18-4846-954D-E509366AEF67"
+CHAR_CONFIG_UUID = "1C8FD138-FC18-4846-954D-E509366AEF68"
 
 # Heartbeat rate: 2 Hz for 3-second timeout detection
 HEARTBEAT_INTERVAL = 0.5
@@ -53,14 +56,23 @@ class PeripheralDelegate(NSObject):
         self._hb_thread = None
         self._hb_char = None
         self._haptic_char = None
+        self._config_char = None
         self._cb = None
         self._haptic_sender_cb = None
+        self._initial_config: Dict[str, Any] = {}
+        self._current_config: bytes = b""
         return self
 
-    def setup_(self, code, cb=None, haptic_sender_cb=None):
+    def setup_(self, code, cb=None, haptic_sender_cb=None, initial_config=None):
         self.auth_code = code
         self._cb = cb
         self._haptic_sender_cb = haptic_sender_cb
+        self._initial_config = initial_config or {}
+        # Pre-pack the config for reads
+        if self._initial_config:
+            self._current_config = protocol.pack_config(self._initial_config)
+        else:
+            self._current_config = protocol.pack_config({})
         self.pm = CBPeripheralManager.alloc().initWithDelegate_queue_options_(self, None, None)
         return self
 
@@ -140,10 +152,22 @@ class PeripheralDelegate(NSObject):
         )
         self._haptic_char = haptic_char
 
+        # Config (Read + Notify) - as per Multi-transport-spec.md
+        config_char = CBMutableCharacteristic.alloc().initWithType_properties_value_permissions_(
+            CBUUID.UUIDWithString_(CHAR_CONFIG_UUID),
+            CBCharacteristicPropertyRead | CBCharacteristicPropertyNotify,
+            None,
+            CBAttributePermissionsReadable,
+        )
+        self._config_char = config_char
+
         service = CBMutableService.alloc().initWithType_primary_(
             CBUUID.UUIDWithString_(SERVICE_UUID), True
         )
-        service.setCharacteristics_([ctrl_char, auth_char, pose_char, heartbeat_char, cmd_char, haptic_char])
+        service.setCharacteristics_([
+            ctrl_char, auth_char, pose_char, heartbeat_char, 
+            cmd_char, haptic_char, config_char
+        ])
         self.pm.addService_(service)
 
         # Start advertising
@@ -173,6 +197,17 @@ class PeripheralDelegate(NSObject):
                 self._haptic_sender_cb(_send_haptic)
             except Exception:
                 pass
+
+    def update_config(self, config: Dict[str, Any]) -> bool:
+        """Update and notify config to connected centrals."""
+        try:
+            self._current_config = protocol.pack_config(config)
+            if self._config_char is not None:
+                val = NSData.dataWithBytes_length_(self._current_config, len(self._current_config))
+                self.pm.updateValue_forCharacteristic_onSubscribedCentrals_(val, self._config_char, None)
+            return True
+        except Exception:
+            return False
 
     def _hb_loop(self):
         """Heartbeat loop - 2 Hz with binary format."""
@@ -243,6 +278,11 @@ class PeripheralDelegate(NSObject):
         try:
             uuid = characteristic.UUID().UUIDString()
             self.emitEvent_({"type": "ble_subscribe", "char": uuid})
+            
+            # Send initial config when client subscribes to config characteristic
+            if uuid == CHAR_CONFIG_UUID and self._config_char is not None and self._current_config:
+                val = NSData.dataWithBytes_length_(self._current_config, len(self._current_config))
+                self.pm.updateValue_forCharacteristic_onSubscribedCentrals_(val, self._config_char, None)
         except Exception as e:
             self.emitEvent_({"type": "error", "message": str(e)})
 
@@ -274,14 +314,25 @@ class PeripheralDelegate(NSObject):
             peripheral.respondToRequest_withResult_(request, CBATTErrorSuccess)
             if not QUIET_HIGH_FREQUENCY:
                 self.emitEvent_({"type": "heartbeat"})
+        elif uuid == CHAR_CONFIG_UUID:
+            request.setValue_(NSData.dataWithBytes_length_(self._current_config, len(self._current_config)))
+            peripheral.respondToRequest_withResult_(request, CBATTErrorSuccess)
         else:
             peripheral.respondToRequest_withResult_(request, CBATTErrorSuccess)
 
 
-def run_macos_peripheral(name: str, expected_code: str, callback=None, haptic_sender_cb=None):
+def run_macos_peripheral(
+    name: str, 
+    expected_code: str, 
+    callback: Optional[Callable[[Dict[str, Any]], None]] = None, 
+    haptic_sender_cb: Optional[Callable[[Callable[[float], bool]], None]] = None,
+    initial_config: Optional[Dict[str, Any]] = None,
+):
     import signal
     
-    delegate = PeripheralDelegate.alloc().init().setup_(expected_code, callback, haptic_sender_cb)
+    delegate = PeripheralDelegate.alloc().init().setup_(
+        expected_code, callback, haptic_sender_cb, initial_config
+    )
     delegate.local_name = name
     
     def handle_sigterm(signum, frame):

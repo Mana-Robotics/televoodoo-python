@@ -1,43 +1,52 @@
-"""Televoodoo binary protocol - shared by BLE and WiFi transports.
+"""Televoodoo binary protocol - shared by all transports (TCP, BLE).
 
-See documentation:
-- BLE_API.md
-- WIFI_API.md
+See Multi-transport-spec.md for the full protocol specification.
 
 All messages use little-endian byte order.
+TCP messages are wrapped with a 2-byte length prefix.
+BLE messages are sent without framing (each write is a complete message).
 """
 
 from __future__ import annotations
 
 import struct
-import time
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 # Protocol constants
 MAGIC = b"TELE"
 PROTOCOL_VERSION = 1
+MIN_SUPPORTED_VERSION = 1
+MAX_SUPPORTED_VERSION = 1
+
+# Default ports
+TCP_DATA_PORT = 50000
+UDP_BEACON_PORT = 50001
 
 # Struct formats (little-endian)
 HEADER_FORMAT = "<4sBB"  # magic(4), msg_type(1), version(1) = 6 bytes
 HELLO_FORMAT = "<4sBBI6sH"  # header + session_id(4) + code(6) + reserved(2) = 18 bytes
-ACK_FORMAT = "<4sBBBB"  # header + status(1) + reserved(1) = 8 bytes
+ACK_FORMAT = "<4sBBBBBBH"  # header + status(1) + reserved(1) + min_version(1) + max_version(1) + reserved2(2) = 12 bytes
 POSE_FORMAT = "<4sBBHQBB7f"  # header + seq(2) + ts(8) + flags(1) + reserved(1) + 7 floats = 46 bytes
 BYE_FORMAT = "<4sBBI"  # header + session_id(4) = 10 bytes
 CMD_FORMAT = "<4sBBBB"  # header + cmd_type(1) + value(1) = 8 bytes
 HEARTBEAT_FORMAT = "<4sBBII"  # header + counter(4) + uptime_ms(4) = 14 bytes
 HAPTIC_FORMAT = "<4sBBfBB"  # header + intensity(4) + channel(1) + reserved(1) = 12 bytes
+BEACON_FORMAT = "<4sBBHBB"  # header + port(2) + name_len(1) + reserved(1) = 10 bytes (+ name)
+CONFIG_HEADER_FORMAT = "<4sBBH"  # header + config_len(2) = 8 bytes (+ config JSON)
 
 # Sizes
 HEADER_SIZE = 6
 HELLO_SIZE = 18
-ACK_SIZE = 8
+ACK_SIZE = 12
 POSE_SIZE = 46
 BYE_SIZE = 10
 CMD_SIZE = 8
 HEARTBEAT_SIZE = 14
 HAPTIC_SIZE = 12
+BEACON_HEADER_SIZE = 10
+CONFIG_HEADER_SIZE = 8
 
 
 class MsgType(IntEnum):
@@ -49,6 +58,8 @@ class MsgType(IntEnum):
     CMD = 5
     HEARTBEAT = 6
     HAPTIC = 7
+    BEACON = 8
+    CONFIG = 9
 
 
 class AckStatus(IntEnum):
@@ -56,7 +67,7 @@ class AckStatus(IntEnum):
     OK = 0
     BAD_CODE = 1
     BUSY = 2
-    VERSION_UNSUPPORTED = 3
+    VERSION_MISMATCH = 3
 
 
 class CmdType(IntEnum):
@@ -77,25 +88,28 @@ class Header:
     version: int
 
     def is_valid(self) -> bool:
-        return self.magic == MAGIC and self.version == PROTOCOL_VERSION
+        return self.magic == MAGIC
 
 
 @dataclass
 class HelloMsg:
-    """HELLO message (iPhone → PC)."""
+    """HELLO message (Mobile → Host)."""
     session_id: int
     code: str
+    version: int = PROTOCOL_VERSION
 
 
 @dataclass
 class AckMsg:
-    """ACK message (PC → iPhone)."""
+    """ACK message (Host → Mobile)."""
     status: AckStatus
+    min_version: int = MIN_SUPPORTED_VERSION
+    max_version: int = MAX_SUPPORTED_VERSION
 
 
 @dataclass
 class PoseMsg:
-    """POSE message (iPhone → PC)."""
+    """POSE message (Mobile → Host)."""
     seq: int
     timestamp_us: int
     movement_start: bool
@@ -110,33 +124,52 @@ class PoseMsg:
 
 @dataclass
 class ByeMsg:
-    """BYE message (iPhone → PC)."""
+    """BYE message (Mobile → Host)."""
     session_id: int
 
 
 @dataclass
 class CmdMsg:
-    """CMD message (iPhone → PC)."""
+    """CMD message (Mobile → Host)."""
     cmd_type: CmdType
     value: int
 
 
 @dataclass
 class HeartbeatMsg:
-    """HEARTBEAT message (PC → iPhone, BLE only)."""
+    """HEARTBEAT message (Host → Mobile, BLE only)."""
     counter: int
     uptime_ms: int
 
 
 @dataclass
 class HapticMsg:
-    """HAPTIC message (PC → iPhone).
+    """HAPTIC message (Host → Mobile).
     
-    Used to trigger haptic feedback on the iPhone based on robot sensor values.
+    Used to trigger haptic feedback on the phone based on robot sensor values.
     The intensity is normalized to 0.0-1.0 range by the sender.
     """
     intensity: float  # 0.0 to 1.0
-    channel: int = 0  # Reserved for future use (e.g., multiple haptic motors)
+    channel: int = 0  # Reserved for future use
+
+
+@dataclass
+class BeaconMsg:
+    """BEACON message (Host → Broadcast, UDP only).
+    
+    Discovery beacon broadcast by host for mobile to find the service.
+    """
+    port: int  # TCP data port
+    name: str  # Service name
+
+
+@dataclass
+class ConfigMsg:
+    """CONFIG message (Host → Mobile).
+    
+    Runtime configuration sent after authentication and on config changes.
+    """
+    config: Dict[str, Any]  # JSON config payload
 
 
 # =============================================================================
@@ -165,7 +198,20 @@ def parse_hello(data: bytes) -> Optional[HelloMsg]:
             return None
         # Code is 6 bytes, strip null padding
         code = code_bytes.rstrip(b'\x00').decode('utf-8', errors='replace')
-        return HelloMsg(session_id=session_id, code=code)
+        return HelloMsg(session_id=session_id, code=code, version=version)
+    except Exception:
+        return None
+
+
+def parse_ack(data: bytes) -> Optional[AckMsg]:
+    """Parse ACK message."""
+    if len(data) < ACK_SIZE:
+        return None
+    try:
+        magic, msg_type, version, status, _, min_ver, max_ver, _ = struct.unpack(ACK_FORMAT, data[:ACK_SIZE])
+        if magic != MAGIC or msg_type != MsgType.ACK:
+            return None
+        return AckMsg(status=AckStatus(status), min_version=min_ver, max_version=max_ver)
     except Exception:
         return None
 
@@ -215,9 +261,48 @@ def parse_cmd(data: bytes) -> Optional[CmdMsg]:
         return None
 
 
+def parse_beacon(data: bytes) -> Optional[BeaconMsg]:
+    """Parse BEACON message."""
+    if len(data) < BEACON_HEADER_SIZE:
+        return None
+    try:
+        magic, msg_type, version, port, name_len, _ = struct.unpack(BEACON_FORMAT, data[:BEACON_HEADER_SIZE])
+        if magic != MAGIC or msg_type != MsgType.BEACON:
+            return None
+        if len(data) < BEACON_HEADER_SIZE + name_len:
+            return None
+        name = data[BEACON_HEADER_SIZE:BEACON_HEADER_SIZE + name_len].decode('utf-8', errors='replace')
+        return BeaconMsg(port=port, name=name)
+    except Exception:
+        return None
+
+
+def parse_config(data: bytes) -> Optional[ConfigMsg]:
+    """Parse CONFIG message."""
+    if len(data) < CONFIG_HEADER_SIZE:
+        return None
+    try:
+        import json
+        magic, msg_type, version, config_len = struct.unpack(CONFIG_HEADER_FORMAT, data[:CONFIG_HEADER_SIZE])
+        if magic != MAGIC or msg_type != MsgType.CONFIG:
+            return None
+        if len(data) < CONFIG_HEADER_SIZE + config_len:
+            return None
+        config_json = data[CONFIG_HEADER_SIZE:CONFIG_HEADER_SIZE + config_len].decode('utf-8', errors='replace')
+        config = json.loads(config_json)
+        return ConfigMsg(config=config)
+    except Exception:
+        return None
+
+
 def is_binary_protocol(data: bytes) -> bool:
     """Check if data starts with the TELE magic bytes."""
     return len(data) >= 4 and data[:4] == MAGIC
+
+
+def is_version_supported(version: int) -> bool:
+    """Check if a protocol version is supported."""
+    return MIN_SUPPORTED_VERSION <= version <= MAX_SUPPORTED_VERSION
 
 
 # =============================================================================
@@ -227,7 +312,10 @@ def is_binary_protocol(data: bytes) -> bool:
 
 def pack_ack(status: AckStatus) -> bytes:
     """Pack ACK message."""
-    return struct.pack(ACK_FORMAT, MAGIC, MsgType.ACK, PROTOCOL_VERSION, status, 0)
+    return struct.pack(
+        ACK_FORMAT, MAGIC, MsgType.ACK, PROTOCOL_VERSION,
+        status, 0, MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION, 0
+    )
 
 
 def pack_heartbeat(counter: int, uptime_ms: int) -> bytes:
@@ -282,13 +370,79 @@ def pack_haptic(intensity: float, channel: int = 0) -> bytes:
     return struct.pack(HAPTIC_FORMAT, MAGIC, MsgType.HAPTIC, PROTOCOL_VERSION, intensity, channel, 0)
 
 
+def pack_beacon(name: str, port: int = TCP_DATA_PORT) -> bytes:
+    """Pack BEACON message for UDP broadcast.
+    
+    Args:
+        name: Service name (1-20 chars)
+        port: TCP data port
+    
+    Returns:
+        BEACON message bytes (10 + name_len bytes)
+    """
+    name_bytes = name.encode('utf-8')[:255]  # Max 255 chars
+    name_len = len(name_bytes)
+    header = struct.pack(BEACON_FORMAT, MAGIC, MsgType.BEACON, PROTOCOL_VERSION, port, name_len, 0)
+    return header + name_bytes
+
+
+def pack_config(config: Dict[str, Any]) -> bytes:
+    """Pack CONFIG message.
+    
+    Args:
+        config: Configuration dictionary to send as JSON
+    
+    Returns:
+        CONFIG message bytes (8 + config_len bytes)
+    """
+    import json
+    config_json = json.dumps(config, separators=(',', ':')).encode('utf-8')
+    config_len = len(config_json)
+    header = struct.pack(CONFIG_HEADER_FORMAT, MAGIC, MsgType.CONFIG, PROTOCOL_VERSION, config_len)
+    return header + config_json
+
+
+# =============================================================================
+# TCP Framing utilities
+# =============================================================================
+
+
+def frame_message(payload: bytes) -> bytes:
+    """Frame a message for TCP transport with 2-byte length prefix.
+    
+    Args:
+        payload: Raw message bytes (e.g., from pack_* functions)
+    
+    Returns:
+        Framed message with length prefix
+    """
+    length = len(payload)
+    if length > 65535:
+        raise ValueError(f"Message too large for framing: {length} bytes")
+    return struct.pack("<H", length) + payload
+
+
+def read_frame_length(length_bytes: bytes) -> int:
+    """Read frame length from 2-byte prefix.
+    
+    Args:
+        length_bytes: 2 bytes containing little-endian length
+    
+    Returns:
+        Payload length
+    """
+    if len(length_bytes) != 2:
+        raise ValueError("Length prefix must be exactly 2 bytes")
+    return struct.unpack("<H", length_bytes)[0]
+
+
 # =============================================================================
 # Conversion to callback event format
 # =============================================================================
 
 
 def pose_to_event(pose: PoseMsg) -> Dict[str, Any]:
-    """Convert PoseMsg to callback event format (matches BLE/WIFI callback format)."""
+    """Convert PoseMsg to callback event format (matches BLE/TCP callback format)."""
     return {
         "type": "pose",
         "data": {
