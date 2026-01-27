@@ -8,8 +8,6 @@ from typing import Any, Callable, Dict, Optional
 import objc
 from Foundation import NSObject, NSData, NSRunLoop
 
-QUIET_HIGH_FREQUENCY = False
-
 from CoreBluetooth import (
     CBPeripheralManager,
     CBMutableCharacteristic,
@@ -27,19 +25,19 @@ from CoreBluetooth import (
 )
 
 from . import protocol
+from .ble import (
+    SERVICE_UUID,
+    CHAR_CONTROL_UUID,
+    CHAR_AUTH_UUID,
+    CHAR_POSE_UUID,
+    CHAR_HEARTBEAT_UUID,
+    CHAR_COMMAND_UUID,
+    CHAR_HAPTIC_UUID,
+    CHAR_CONFIG_UUID,
+    HEARTBEAT_INTERVAL,
+)
 
-# Service and characteristic UUIDs (as per Multi-transport-spec.md)
-SERVICE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF61"
-CHAR_CONTROL_UUID = "1C8FD138-FC18-4846-954D-E509366AEF62"
-CHAR_AUTH_UUID = "1C8FD138-FC18-4846-954D-E509366AEF63"
-CHAR_POSE_UUID = "1C8FD138-FC18-4846-954D-E509366AEF64"
-CHAR_HEARTBEAT_UUID = "1C8FD138-FC18-4846-954D-E509366AEF65"
-CHAR_COMMAND_UUID = "1C8FD138-FC18-4846-954D-E509366AEF66"
-CHAR_HAPTIC_UUID = "1C8FD138-FC18-4846-954D-E509366AEF67"
-CHAR_CONFIG_UUID = "1C8FD138-FC18-4846-954D-E509366AEF68"
-
-# Heartbeat rate: 2 Hz for 3-second timeout detection
-HEARTBEAT_INTERVAL = 0.5
+QUIET_HIGH_FREQUENCY = False
 
 
 class PeripheralDelegate(NSObject):

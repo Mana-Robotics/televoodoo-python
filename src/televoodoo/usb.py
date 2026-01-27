@@ -1,22 +1,44 @@
-"""USB connection utilities for Televoodoo.
+"""USB connection backend for Televoodoo.
 
-USB connections use the same UDP/mDNS server as WiFi. The phone app discovers
-the server via mDNS on whatever network interface it's connected to (WiFi or USB).
+USB connections use the same TCP server as WiFi. The server binds to all
+interfaces (0.0.0.0) and broadcasts UDP beacons, so the phone discovers
+the server regardless of whether it's connected via WiFi or USB.
 
-This module provides utility functions for USB interface detection, which can
-be useful for diagnostics and troubleshooting.
+Usage:
+    from televoodoo.usb import run_server, send_haptic
 
-Note: The main run_server functionality is provided by wifi.py - USB uses the
-same server since mDNS advertises on all interfaces.
+    def on_event(evt):
+        print(evt)
+
+    run_server(name="myvoodoo", code="ABC123", callback=on_event)
+
+See docs/USB_API.md for setup details and docs/MOBILE_PROTOCOL.md for protocol.
 """
 
 from __future__ import annotations
 
 import platform
-import re
 import subprocess
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+# Re-export TCP server functionality (same as WiFi)
+from .tcp_service import (
+    # Constants
+    DEFAULT_TCP_PORT,
+    DEFAULT_BEACON_PORT,
+    # Classes
+    TcpServer,
+    Session,
+    # Functions
+    run_server,
+    get_server_url,
+    send_haptic,
+    send_config,
+)
+
+
+# USB interface detection utilities (for diagnostics)
 
 
 @dataclass
@@ -41,22 +63,31 @@ def _run_command(cmd: List[str]) -> str:
         return ""
 
 
-def detect_usb_interfaces_darwin() -> List[UsbInterface]:
-    """Detect USB network interfaces on macOS using networksetup.
+def detect_usb_interfaces() -> List[UsbInterface]:
+    """Detect USB network interfaces on the current platform.
     
-    This identifies interfaces by their hardware port name, excluding
-    known non-USB types (Wi-Fi, Ethernet, Thunderbolt).
+    This is a diagnostic utility. The TCP server works without detection
+    since it binds to all interfaces.
     
     Returns:
-        List of USB interfaces (e.g., "Pixel 9a", "iPhone USB")
+        List of detected USB network interfaces.
     """
+    system = platform.system().lower()
+    
+    if system == "darwin":
+        return _detect_usb_interfaces_darwin()
+    else:
+        return []
+
+
+def _detect_usb_interfaces_darwin() -> List[UsbInterface]:
+    """Detect USB network interfaces on macOS using networksetup."""
     interfaces = []
     
     output = _run_command(["networksetup", "-listallhardwareports"])
     if not output:
         return interfaces
     
-    # Parse output: Hardware Port: <name>\nDevice: <device>
     current_name = None
     
     # Known non-USB hardware port prefixes to exclude
@@ -76,79 +107,43 @@ def detect_usb_interfaces_darwin() -> List[UsbInterface]:
         elif line.startswith("Device:") and current_name:
             device = line.replace("Device:", "").strip()
             
-            # Check if this is likely a USB device (not in exclude list)
             is_excluded = any(current_name.startswith(prefix) for prefix in exclude_prefixes)
-            # Also exclude generic "Ethernet Adapter" entries
             if "Ethernet Adapter" in current_name:
                 is_excluded = True
             
             if not is_excluded and current_name and device:
-                interfaces.append(UsbInterface(
-                    name=current_name,
-                    device=device,
-                ))
+                interfaces.append(UsbInterface(name=current_name, device=device))
             
             current_name = None
     
     return interfaces
 
 
-def detect_usb_interfaces() -> List[UsbInterface]:
-    """Detect USB network interfaces on the current platform.
-    
-    Returns:
-        List of detected USB network interfaces.
-    """
-    system = platform.system().lower()
-    
-    if system == "darwin":
-        return detect_usb_interfaces_darwin()
-    else:
-        # On other platforms, return empty list
-        # The mDNS approach works regardless of detection
-        return []
-
-
 def get_usb_interface_names() -> List[str]:
-    """Get the names of USB network interfaces.
-    
-    Returns:
-        List of interface names (e.g., ["Pixel 9a", "iPhone USB"])
-    """
+    """Get names of detected USB network interfaces."""
     return [iface.name for iface in detect_usb_interfaces()]
 
 
 def is_usb_available() -> bool:
-    """Check if a USB network interface is available.
-    
-    Returns:
-        True if at least one USB network interface is detected.
-    """
+    """Check if a USB network interface is detected."""
     return len(detect_usb_interfaces()) > 0
 
 
-def get_usb_info() -> Optional[dict]:
-    """Get information about USB network interfaces.
-    
-    Returns:
-        Dict with USB interface info, or None if not available.
-    """
-    interfaces = detect_usb_interfaces()
-    if not interfaces:
-        return None
-    
-    return {
-        "interfaces": [{"name": i.name, "device": i.device} for i in interfaces],
-        "count": len(interfaces),
-    }
-
-
-# Backward compatibility - these functions are deprecated but kept for existing code
-def get_usb_ip() -> Optional[str]:
-    """Deprecated: IP detection not needed with mDNS approach."""
-    return None
-
-
-def get_usb_gateway() -> Optional[str]:
-    """Deprecated: Gateway detection not needed with mDNS approach."""
-    return None
+__all__ = [
+    # Constants
+    "DEFAULT_TCP_PORT",
+    "DEFAULT_BEACON_PORT",
+    # Classes
+    "TcpServer",
+    "Session",
+    # Functions
+    "run_server",
+    "get_server_url",
+    "send_haptic",
+    "send_config",
+    # USB utilities
+    "UsbInterface",
+    "detect_usb_interfaces",
+    "get_usb_interface_names",
+    "is_usb_available",
+]

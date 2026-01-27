@@ -1,4 +1,4 @@
-# Televoodoo Mobile Protocol Specification
+# Televoodoo Protocol Docs Specification
 
 **Version**: 1.0  
 **For**: iOS/Android App Developers

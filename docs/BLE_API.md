@@ -1,304 +1,105 @@
-# BLE Peripheral API
+# BLE Connection
 
-Televoodoo Python creates a BLE peripheral that the Televoodoo App connects to. This document describes the BLE service, characteristics, and binary protocol.
+Bluetooth Low Energy provides wireless connectivity when WiFi is unavailable. It has higher latency (~32ms) than WiFi/USB but works without network configuration.
 
-> This is a transport-specific document. For general connection information, see [Connection & Authentication](CONNECTION_AUTHENTICATION.md).
+> For protocol details, see [Protocol Docs](MOBILE_PROTOCOL.md).
 
----
+## Platform Support
 
-## BLE Service Configuration
+| Platform | Support |
+|----------|---------|
+| macOS | Full support (CoreBluetooth) |
+| Ubuntu Linux | Full support (BlueZ via bluezero) |
+| Windows | Not supported |
 
-### Service UUID
+## How It Works
 
+1. Python creates a BLE peripheral with the Televoodoo GATT service
+2. Phone scans for peripherals matching the QR code `name`
+3. Phone connects and writes auth code to Auth characteristic
+4. Pose data streams via Write operations to Pose characteristic
+5. Heartbeat (2 Hz) and Haptic feedback via Notify characteristics
+
+## BLE Service
+
+**Service UUID**: `1C8FD138-FC18-4846-954D-E509366AEF61`
+
+| Characteristic | UUID Suffix | Properties | Direction |
+|----------------|-------------|------------|-----------|
+| Auth | `...AEF63` | Write | Phone → Host |
+| Pose | `...AEF64` | Write | Phone → Host |
+| Heartbeat | `...AEF65` | Read, Notify | Host → Phone |
+| Command | `...AEF66` | Write | Phone → Host |
+| Haptic | `...AEF67` | Read, Notify | Host → Phone |
+| Config | `...AEF68` | Read, Notify | Host → Phone |
+
+See [Protocol Docs](MOBILE_PROTOCOL.md) for message formats.
+
+## CLI Usage
+
+```bash
+televoodoo --connection ble
 ```
-1C8FD138-FC18-4846-954D-E509366AEF61
-```
 
-### Characteristics Summary
-
-| # | Name | UUID Suffix | Properties | Format |
-|---|------|-------------|------------|--------|
-| 1 | Authentication | `...AEF63` | Write | 6-char string |
-| 2 | Pose Data | `...AEF64` | Write, WriteWithoutResponse | Binary |
-| 3 | Heartbeat | `...AEF65` | Read, Notify | Binary |
-| 4 | Command Data | `...AEF66` | Write, WriteWithoutResponse | Binary |
-| 5 | Haptic Data | `...AEF67` | Read, Notify | Binary |
-
----
-
-## Binary Protocol (Shared with WiFi)
-
-All binary messages use **little-endian** byte order.
-
-### Common Header (6 bytes)
-
-| Offset | Field | Type | Description |
-|--------|-------|------|-------------|
-| 0 | `magic` | `char[4]` | `"TELE"` |
-| 4 | `msg_type` | `uint8` | Message type ID |
-| 5 | `version` | `uint8` | Protocol version (`1`) |
-
-### Message Types (BLE subset)
-
-| ID | Name | Direction | Characteristic |
-|----|------|-----------|----------------|
-| 3 | POSE | iPhone → PC | Pose Data |
-| 5 | CMD | iPhone → PC | Command Data |
-| 6 | HEARTBEAT | PC → iPhone | Heartbeat |
-| 7 | HAPTIC | PC → iPhone | Haptic Data |
-
-Note: HELLO/ACK/BYE (types 1, 2, 4) are not used in BLE—connection state is managed by the BLE stack.
-
----
-
-## Characteristics Detail
-
-### 1. Authentication Characteristic
-
-- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF63`
-- **Properties**: Write, WriteWithoutResponse
-- **Format**: UTF-8 string (6-character code)
-
-**Flow:**
-1. App connects to peripheral
-2. App writes 6-char code to this characteristic
-3. Python validates code
-4. If valid, pose data is accepted
-
-### 2. Pose Data Characteristic
-
-- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF64`
-- **Properties**: Write, WriteWithoutResponse
-- **Format**: Binary POSE packet (46 bytes)
-
-#### POSE Packet (iPhone → PC)
-
-| Offset | Field | Type | Bytes |
-|--------|-------|------|-------|
-| 0 | header | - | 6 |
-| 6 | seq | `uint16` | 2 |
-| 8 | timestamp_us | `uint64` | 8 |
-| 16 | flags | `uint8` | 1 |
-| 17 | reserved | `uint8` | 1 |
-| 18 | x | `float32` | 4 |
-| 22 | y | `float32` | 4 |
-| 26 | z | `float32` | 4 |
-| 30 | qx | `float32` | 4 |
-| 34 | qy | `float32` | 4 |
-| 38 | qz | `float32` | 4 |
-| 42 | qw | `float32` | 4 |
-| **Total** | | | **46** |
-
-#### Flags Bitfield
-
-| Bit | Name | Description |
-|-----|------|-------------|
-| 0 | `movement_start` | New movement origin (reset deltas) |
-| 1-7 | reserved | Must be 0 |
-
-#### Python Struct
+## Python Usage
 
 ```python
-POSE_FORMAT = "<4sBBHQBB7f"  # little-endian, 46 bytes
+from televoodoo import start_televoodoo
+
+def on_event(evt):
+    if evt.get("type") == "pose":
+        print(evt["data"]["absolute_input"])
+
+start_televoodoo(callback=on_event, connection="ble")
 ```
 
-### 3. Heartbeat Characteristic
+## Platform Setup
 
-- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF65`
-- **Properties**: Read, Notify
-- **Format**: Binary HEARTBEAT packet (14 bytes)
+### macOS
 
-#### HEARTBEAT Packet (PC → iPhone)
+No setup required. Grant Bluetooth permission when prompted.
 
-| Offset | Field | Type | Bytes |
-|--------|-------|------|-------|
-| 0 | header | - | 6 |
-| 6 | counter | `uint32` | 4 |
-| 10 | uptime_ms | `uint32` | 4 |
-| **Total** | | | **14** |
+### Ubuntu Linux
 
-- `counter`: Increments with each heartbeat (rollover OK)
-- `uptime_ms`: Milliseconds since peripheral started
+Install BlueZ dependencies:
 
-**Liveness Detection:**
-- PC updates heartbeat at **2 Hz** (every 500ms)
-- iPhone subscribes to notifications
-- If no heartbeat update for **3 seconds** → PC disconnected (or app backgrounded)
-
-### 4. Command Data Characteristic
-
-- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF66`
-- **Properties**: Write, WriteWithoutResponse
-- **Format**: Binary CMD packet (8 bytes)
-
-#### CMD Packet (iPhone → PC)
-
-| Offset | Field | Type | Bytes |
-|--------|-------|------|-------|
-| 0 | header | - | 6 |
-| 6 | cmd_type | `uint8` | 1 |
-| 7 | value | `uint8` | 1 |
-| **Total** | | | **8** |
-
-#### Command Types
-
-| ID | Name | Values |
-|----|------|--------|
-| 1 | RECORDING | `1`=start, `0`=stop |
-| 2 | KEEP_RECORDING | `1`=keep, `0`=discard |
-
-### 5. Haptic Data Characteristic
-
-- **UUID**: `1C8FD138-FC18-4846-954D-E509366AEF67`
-- **Properties**: Read, Notify
-- **Format**: Binary HAPTIC packet (12 bytes)
-
-#### HAPTIC Packet (PC → iPhone)
-
-| Offset | Field | Type | Bytes |
-|--------|-------|------|-------|
-| 0 | header | - | 6 |
-| 6 | intensity | `float32` | 4 |
-| 10 | channel | `uint8` | 1 |
-| 11 | reserved | `uint8` | 1 |
-| **Total** | | | **12** |
-
-- `intensity`: Haptic intensity from 0.0 (off) to 1.0 (max vibration)
-- `channel`: Reserved for future use (always 0)
-
-#### Python Struct
-
-```python
-HAPTIC_FORMAT = "<4sBBfBB"  # little-endian, 12 bytes
+```bash
+sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev bluetooth bluez
 ```
 
-**Usage:**
-- PC updates haptic value when robot sensor data changes (e.g., force feedback)
-- iPhone subscribes to notifications on this characteristic
-- iPhone triggers haptic feedback proportional to intensity value
+Ensure Bluetooth service is running:
 
-See [Haptic Feedback](HAPTIC_FEEDBACK.md) for usage details.
-
----
-
-## Disconnect Detection
-
-BLE provides connection state natively, but the heartbeat adds app-level liveness:
-
-| Direction | Mechanism | Timeout |
-|-----------|-----------|---------|
-| iPhone → PC | BLE disconnection event | Immediate |
-| PC → iPhone | BLE disconnection event OR heartbeat stops | 3 seconds |
-
-The 3-second heartbeat timeout catches cases where:
-- Python app crashes but OS keeps BLE connection alive briefly
-- Python app is suspended/paused
-
----
-
-## Callback Event Format
-
-Same format as WiFi for compatibility. See [Data Format](DATA_FORMAT.md) for full details.
-
-```python
-# Pose event
-{
-    "type": "pose",
-    "data": {
-        "absolute_input": {
-            "movement_start": True,
-            "x": 0.1, "y": 0.2, "z": 0.05,
-            "qx": 0.0, "qy": 0.0, "qz": 0.0, "qw": 1.0,
-        }
-    }
-}
-
-# Command event
-{"type": "command", "name": "recording", "value": True}
-
-# Connection events
-{"type": "ble_connected"}
-{"type": "ble_authenticated"}
-{"type": "ble_disconnected"}
+```bash
+sudo systemctl enable bluetooth
+sudo systemctl start bluetooth
+bluetoothctl power on
 ```
 
----
+## Troubleshooting
 
-## Shared Parsing Code
+| Issue | Solution |
+|-------|----------|
+| Peripheral not advertising | Check Bluetooth is enabled, restart app |
+| Phone can't find peripheral | Ensure within 10m, clear line of sight |
+| Authentication fails | Verify code matches QR, rescan |
+| Heartbeat timeout | Python app may be suspended, restart |
+| Linux: No adapter found | Run `bluetoothctl power on` |
 
-Both BLE and WiFi use the same binary parsing (see `protocol.py`):
+## Latency Notes
 
-```python
-import struct
+BLE has higher latency than WiFi/USB:
 
-HEADER_FORMAT = "<4sBB"  # magic, msg_type, version
-POSE_FORMAT = "<4sBBHQBB7f"
-CMD_FORMAT = "<4sBBBB"
-HEARTBEAT_FORMAT = "<4sBBII"
-HAPTIC_FORMAT = "<4sBBfBB"
+| Connection | Latency |
+|------------|---------|
+| USB | ~5-10ms |
+| WiFi | ~16ms |
+| BLE | ~32ms effective |
 
-def parse_pose(data: bytes) -> dict:
-    """Parse POSE packet to dict matching callback format."""
-    magic, msg_type, version, seq, ts, flags, _, x, y, z, qx, qy, qz, qw = \
-        struct.unpack(POSE_FORMAT, data)
-    
-    if magic != b"TELE" or msg_type != 3:
-        raise ValueError("Invalid POSE packet")
-    
-    return {
-        "movement_start": bool(flags & 0x01),
-        "x": x, "y": y, "z": z,
-        "qx": qx, "qy": qy, "qz": qz, "qw": qw,
-        "seq": seq,
-        "timestamp_us": ts,
-    }
-
-def pack_heartbeat(counter: int, uptime_ms: int) -> bytes:
-    """Pack HEARTBEAT packet for BLE characteristic."""
-    return struct.pack(HEARTBEAT_FORMAT, b"TELE", 6, 1, counter, uptime_ms)
-
-def pack_haptic(intensity: float, channel: int = 0) -> bytes:
-    """Pack HAPTIC packet for BLE characteristic."""
-    intensity = max(0.0, min(1.0, intensity))  # Clamp to valid range
-    return struct.pack(HAPTIC_FORMAT, b"TELE", 7, 1, intensity, channel, 0)
-```
-
----
-
-## Connection Flow
-
-1. **Python app starts**: Creates BLE peripheral, starts advertising
-2. **QR code displayed**: Shows peripheral name + 6-char code
-3. **User scans QR**: Televoodoo App discovers and connects
-4. **Authentication**: App writes code to Auth characteristic
-5. **Subscribe to notifications**: App subscribes to Heartbeat and Haptic characteristics
-6. **Heartbeat starts**: Python updates heartbeat at 2 Hz
-7. **Pose streaming**: App writes binary POSE packets
-8. **Haptic feedback**: Python sends HAPTIC packets when sensor values change
-9. **Commands**: App writes binary CMD packets as needed
-10. **Disconnect**: BLE disconnection OR heartbeat timeout
-
----
-
-## Packet Size Considerations
-
-BLE MTU is typically 20-512 bytes depending on negotiation. The packets are designed to fit comfortably:
-
-| Packet | Size | Fits in minimum MTU (20 bytes)? |
-|--------|------|---------------------------------|
-| POSE | 46 bytes | No (needs MTU negotiation) |
-| CMD | 8 bytes | Yes |
-| HEARTBEAT | 14 bytes | Yes |
-| HAPTIC | 12 bytes | Yes |
-
-**Recommendation**: iOS app should request MTU ≥ 64 bytes during connection. Most modern devices support 185+ bytes.
-
----
+BLE uses batched writes and connection intervals that add latency. For latency-sensitive applications, prefer WiFi or USB.
 
 ## See Also
 
-- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — General connection setup
-- **[Data Format](DATA_FORMAT.md)** — Pose data fields
-- **[Haptic Feedback](HAPTIC_FEEDBACK.md)** — Using haptic feedback
-- **[WiFi API](WIFI_API.md)** — WiFi/UDP protocol (shared binary format)
-- **[USB API](USB_API.md)** — USB connection
+- **[Protocol Docs](MOBILE_PROTOCOL.md)** — Full protocol specification
+- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — QR codes, credentials
+- **[WiFi API](WIFI_API.md)** — Lower latency alternative
+- **[Haptic Feedback](HAPTIC_FEEDBACK.md)** — Force feedback via BLE

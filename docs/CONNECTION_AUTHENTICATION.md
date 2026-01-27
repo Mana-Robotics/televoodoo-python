@@ -1,6 +1,6 @@
 # Connection & Authentication
 
-This guide covers how to connect the Televoodoo App to your Python application, including connection types, QR codes, credentials, and troubleshooting.
+This guide covers how to connect the Televoodoo App to your Python application.
 
 ## Connection Types
 
@@ -8,11 +8,11 @@ This guide covers how to connect the Televoodoo App to your Python application, 
 |------|---------|--------------|----------|
 | **WiFi** (default) | ~16ms | Same network | General use, cross-platform |
 | **USB** | ~5-10ms | USB cable + tethering | Lowest latency, force feedback |
-| **BLE** | ~32ms effective | Platform-specific | When WiFi/USB unavailable |
+| **BLE** | ~32ms | Bluetooth | When WiFi/USB unavailable |
 
 ### Selecting a Connection Type
 
-**Via CLI:**
+**CLI:**
 
 ```bash
 televoodoo --connection wifi   # WiFi (default)
@@ -20,34 +20,25 @@ televoodoo --connection usb    # USB tethering
 televoodoo --connection ble    # Bluetooth
 ```
 
-**Via Python:**
+**Python:**
 
 ```python
 start_televoodoo(callback=handler, connection="wifi")  # or "usb", "ble"
 ```
 
-### Transport-Specific Documentation
-
-For detailed setup and protocol information, see:
-
-- **[WiFi API](WIFI_API.md)** — UDP protocol, mDNS discovery
-- **[USB API](USB_API.md)** — USB tethering setup (platform-specific)
-- **[BLE API](BLE_API.md)** — Bluetooth Low Energy service and characteristics
-
 ## Connection Flow
 
-1. **Start your Python application** — A QR code is displayed in the terminal
-2. **Scan QR code** with Televoodoo App — The app reads connection info
-3. **App connects and authenticates** — Using the credentials in the QR code
-4. **Pose streaming begins** — Your callback receives real-time pose events
+1. **Start Python application** — QR code displayed in terminal
+2. **Scan QR code** with Televoodoo App
+3. **App discovers server** via UDP beacons (WiFi/USB) or BLE scan
+4. **App connects and authenticates**
+5. **Pose streaming begins**
 
 ## QR Code Format
 
-The QR code contains minimal JSON data for connection:
-
 ```json
 {
-  "name": "myvoodoo",
+  "name": "voodooXY",
   "code": "ABC123",
   "transport": "wifi"
 }
@@ -55,11 +46,13 @@ The QR code contains minimal JSON data for connection:
 
 | Field | Description |
 |-------|-------------|
-| `name` | Service name for mDNS discovery (WiFi/USB) or BLE peripheral name |
-| `code` | 6-character authentication code |
-| `transport` | Connection type: `"wifi"`, `"usb"`, or `"ble"` |
+| `name` | Service name (1-20 chars) — used for beacon/BLE matching |
+| `code` | Authentication code (6 chars, A-Z 0-9) |
+| `transport` | `"wifi"`, `"usb"`, or `"ble"` |
 
-For WiFi and USB, the phone discovers the server via mDNS using the `name` field. No IP address is included in the QR code.
+**No IP address is included.** The phone discovers the server via:
+- **WiFi/USB**: UDP beacons on port 50001
+- **BLE**: Scanning for peripherals with matching name
 
 ## Authentication Credentials
 
@@ -71,25 +64,23 @@ televoodoo
 # Code: X3P7M2 (random)
 ```
 
-New credentials are generated each launch. Good for quick testing.
+New credentials are generated each launch.
 
 ### Static Credentials
 
-Set fixed credentials for development or ongoing projects:
-
-**Via CLI:**
+**CLI:**
 
 ```bash
 televoodoo --name myvoodoo --code ABC123
 ```
 
-**Via Python:**
+**Python:**
 
 ```python
 start_televoodoo(callback=handler, name="myvoodoo", code="ABC123")
 ```
 
-**Via Config File:**
+**Config file:**
 
 ```json
 {
@@ -100,132 +91,66 @@ start_televoodoo(callback=handler, name="myvoodoo", code="ABC123")
 }
 ```
 
-See [Configuration](CONFIGURATION.md) for details.
-
-### Credential Requirements
+### Requirements
 
 | Field | Requirements |
 |-------|--------------|
 | `name` | 1-20 characters, letters/numbers/underscores/hyphens |
-| `code` | Exactly 6 characters, uppercase letters (A-Z) and digits (0-9) |
-
-## mDNS Discovery
-
-For WiFi and USB connections, the phone discovers the server via mDNS (Bonjour/Zeroconf):
-
-1. QR code provides the service `name`
-2. Phone queries: `<name>._televoodoo._udp.local.`
-3. mDNS returns IP address and port
-4. Phone connects to the discovered endpoint
-
-This works regardless of which network interface (WiFi LAN or USB tethering) the phone is using.
+| `code` | Exactly 6 characters, uppercase A-Z and 0-9 |
 
 ## Multi-Device Setup
 
-### Running Multiple Peripherals
-
-Each peripheral needs a unique name:
+Each device needs a unique name:
 
 ```python
 # Device 1
-start_televoodoo(callback=callback1, name="robot_left", code="LEFT01")
+start_televoodoo(callback=cb1, name="robot_left", code="LEFT01")
 
 # Device 2
-start_televoodoo(callback=callback2, name="robot_right", code="RIGHT1")
+start_televoodoo(callback=cb2, name="robot_right", code="RIGHT1")
 ```
-
-> **Note**: Running multiple BLE peripherals on the same machine may have platform limitations.
-
-### Team Development
-
-For team environments, use static credentials and share them:
-
-```bash
-televoodoo --name lab_robot_5 --code LAB005
-```
-
-## Security Considerations
-
-### Access Code Limitations
-
-- **Not encryption**: Data is not encrypted (WiFi uses plain UDP)
-- **Physical access**: Anyone with the QR code can connect
-- **Session-based**: Codes are only valid while your app is running
-
-### Best Practices
-
-- Use **random codes** in production or public demos
-- Use **static codes** only in controlled development environments
-- Don't share QR codes publicly (screenshots, demos)
-- Consider adding **application-level authentication** for sensitive use cases
 
 ## Troubleshooting
 
-### QR Code Not Scanning
+### General
 
-- Ensure good lighting
-- Increase terminal font size for a larger QR code
-- Try a terminal with better Unicode support
-- Manually enter credentials in the app (if supported)
+| Issue | Solution |
+|-------|----------|
+| QR code not scanning | Increase terminal font size, improve lighting |
+| Authentication failed | Rescan QR code (credentials change each launch) |
+| Connection drops | Reduce distance, check for interference |
 
-### Device Not Found (WiFi)
+### WiFi
 
-- Ensure phone and computer are on the **same WiFi network**
-- Check that your Python app is still running
-- Verify no firewall is blocking UDP port 50000
-- Try specifying a different port: `televoodoo --wifi-port 51000`
+| Issue | Solution |
+|-------|----------|
+| Server not found | Ensure same network, check firewall (ports 50000/50001) |
 
-### Device Not Found (BLE)
+### USB
 
-- Verify Bluetooth is enabled on both devices
-- Ensure devices are within BLE range (~10 meters, line of sight)
-- Restart the BLE peripheral (restart your Python app)
-- On Linux, verify BlueZ: `sudo systemctl status bluetooth`
+| Issue | Solution |
+|-------|----------|
+| iOS not working | Enable Mac Internet Sharing, disable iPhone Personal Hotspot |
+| Android not working | Enable USB Tethering on phone |
 
-### Device Not Found (USB)
+### BLE
 
-- Verify correct setup — iOS and Android require **opposite** configurations!
-  - **iOS**: Mac Internet Sharing = ON, iPhone Personal Hotspot = OFF
-  - **Android**: Mac Internet Sharing = OFF, Android USB Tethering = ON
-- See [USB API](USB_API.md) for detailed prerequisites
+| Issue | Solution |
+|-------|----------|
+| Peripheral not found | Ensure Bluetooth enabled, within 10m range |
+| Linux: No adapter | Run `bluetoothctl power on` |
 
-### Authentication Failed
+## Security Notes
 
-- Verify the access code matches
-- Ensure you scanned the correct/latest QR code
-- Restart your Python app and scan the new QR code
-
-### Connection Drops Frequently
-
-- Reduce distance between devices
-- Minimize obstacles between devices
-- Check for interference (other WiFi networks, BLE devices)
-- Use USB for maximum reliability
-
-## Platform-Specific Notes
-
-### macOS
-
-- **WiFi**: Works out of box
-- **USB**: See [USB API](USB_API.md) for Internet Sharing setup
-- **BLE**: Bluetooth permissions may require approval on first run
-
-### Ubuntu/Linux
-
-- **WiFi**: Works out of box
-- **USB (Android)**: Enable USB Tethering on phone
-- **USB (iOS)**: Requires `sudo apt install libimobiledevice6 usbmuxd`
-- **BLE**: Install `sudo apt-get install libdbus-1-dev libglib2.0-dev python3-dev`
-
-### Windows
-
-- **WiFi**: Works out of box
-- **USB**: Works with appropriate drivers (built-in for most phones)
-- **BLE**: Not supported
+- **Codes are session-based** — only valid while app is running
+- **Not encrypted** — data travels in plaintext
+- **Random codes** recommended for public demos
+- Don't share QR code screenshots publicly
 
 ## See Also
 
-- **[WiFi API](WIFI_API.md)** — UDP protocol details
-- **[USB API](USB_API.md)** — USB tethering setup guide
-- **[BLE API](BLE_API.md)** — Bluetooth Low Energy protocol
-- **[Configuration](CONFIGURATION.md)** — Config file credentials
+- **[Protocol Docs](MOBILE_PROTOCOL.md)** — Full protocol specification
+- **[WiFi API](WIFI_API.md)** — WiFi setup details
+- **[USB API](USB_API.md)** — USB tethering setup
+- **[BLE API](BLE_API.md)** — Bluetooth setup
+- **[Configuration](CONFIGURATION.md)** — Config file options

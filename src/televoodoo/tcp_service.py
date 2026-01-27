@@ -78,52 +78,17 @@ def _get_all_broadcast_addresses() -> list:
     Returns:
         List of broadcast address strings (e.g., ["192.168.1.255", "192.168.2.255"])
     """
-    broadcast_addrs = []
+    import netifaces
     
-    try:
-        import netifaces
-        for iface in netifaces.interfaces():
-            try:
-                addrs = netifaces.ifaddresses(iface)
-                if netifaces.AF_INET in addrs:
-                    for addr_info in addrs[netifaces.AF_INET]:
-                        broadcast = addr_info.get('broadcast')
-                        if broadcast and broadcast not in broadcast_addrs:
-                            broadcast_addrs.append(broadcast)
-            except Exception:
-                pass
-    except ImportError:
-        # netifaces not available, try platform-specific fallback
+    broadcast_addrs = []
+    for iface in netifaces.interfaces():
         try:
-            import subprocess
-            system = platform.system().lower()
-            
-            if system == "darwin":
-                # macOS: parse ifconfig output
-                result = subprocess.run(
-                    ["ifconfig"], capture_output=True, text=True, timeout=2
-                )
-                for line in result.stdout.split('\n'):
-                    if 'broadcast' in line:
-                        parts = line.split()
-                        for i, part in enumerate(parts):
-                            if part == 'broadcast' and i + 1 < len(parts):
-                                addr = parts[i + 1]
-                                if addr not in broadcast_addrs:
-                                    broadcast_addrs.append(addr)
-            elif system == "linux":
-                # Linux: parse ip addr output
-                result = subprocess.run(
-                    ["ip", "addr"], capture_output=True, text=True, timeout=2
-                )
-                for line in result.stdout.split('\n'):
-                    if 'brd' in line and 'inet ' in line:
-                        parts = line.split()
-                        for i, part in enumerate(parts):
-                            if part == 'brd' and i + 1 < len(parts):
-                                addr = parts[i + 1]
-                                if addr not in broadcast_addrs:
-                                    broadcast_addrs.append(addr)
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:
+                for addr_info in addrs[netifaces.AF_INET]:
+                    broadcast = addr_info.get('broadcast')
+                    if broadcast and broadcast not in broadcast_addrs:
+                        broadcast_addrs.append(broadcast)
         except Exception:
             pass
     

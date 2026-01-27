@@ -4,4 +4,4 @@ pyobjc-framework-CoreBluetooth; sys_platform == "darwin"
 bluezero; sys_platform == "linux"
 dbus-python; sys_platform == "linux"
 qrcode
-zeroconf
+netifaces

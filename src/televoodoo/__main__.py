@@ -10,12 +10,9 @@ Usage:
 import argparse
 import json
 import sys
-import threading
-import time
 
 from televoodoo import start_televoodoo, PoseProvider, load_config
 from televoodoo.pose import Pose
-from televoodoo.ble import run_simulation
 from televoodoo.tcp_service import DEFAULT_TCP_PORT, DEFAULT_BEACON_PORT
 
 
@@ -65,11 +62,6 @@ def main() -> int:
         "-q",
         action="store_true",
         help="Suppress high-frequency logging (pose, heartbeat)",
-    )
-    parser.add_argument(
-        "--simulate",
-        action="store_true",
-        help="Run pose simulation instead of waiting for phone connection",
     )
     parser.add_argument(
         "--upsample-hz",
@@ -174,30 +166,26 @@ def main() -> int:
         out = pose_provider.transform(pose)
         print(json.dumps({"type": "pose", "data": out}), flush=True)
 
-    if args.simulate:
-        # Run simulation without phone connection
-        run_simulation(on_pose)
-    else:
-        # Start Televoodoo and wait for phone connection
-        # Resampling is handled internally when upsample_to_hz or rate_limit_hz is set
-        # regulated=None uses default (True when upsampling), False disables it
-        regulated = False if args.no_regulated else None
-        
-        start_televoodoo(
-            callback=on_pose,
-            name=args.name or config.auth_name,
-            code=args.code or config.auth_code,
-            connection=args.connection,
-            quiet=True,  # Suppress raw pose output; callback handles transformed output
-            tcp_port=args.tcp_port,
-            beacon_port=args.beacon_port,
-            config=config,  # Pass config for settings from config file
-            upsample_to_hz=args.upsample_hz,  # CLI args override config
-            rate_limit_hz=args.rate_limit_hz,
-            regulated=regulated,
-            vel_limit=args.vel_limit,
-            acc_limit=args.acc_limit,
-        )
+    # Start Televoodoo and wait for phone connection
+    # Resampling is handled internally when upsample_to_hz or rate_limit_hz is set
+    # regulated=None uses default (True when upsampling), False disables it
+    regulated = False if args.no_regulated else None
+    
+    start_televoodoo(
+        callback=on_pose,
+        name=args.name or config.auth_name,
+        code=args.code or config.auth_code,
+        connection=args.connection,
+        quiet=True,  # Suppress raw pose output; callback handles transformed output
+        tcp_port=args.tcp_port,
+        beacon_port=args.beacon_port,
+        config=config,  # Pass config for settings from config file
+        upsample_to_hz=args.upsample_hz,  # CLI args override config
+        rate_limit_hz=args.rate_limit_hz,
+        regulated=regulated,
+        vel_limit=args.vel_limit,
+        acc_limit=args.acc_limit,
+    )
 
     return 0
 

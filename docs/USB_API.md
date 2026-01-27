@@ -1,244 +1,109 @@
-# USB Connection API
+# USB Connection
 
-USB connection provides a wired alternative to WiFi and BLE for connecting the Televoodoo App to your Python application. USB creates a virtual network interface between your phone and computer.
+USB provides the **lowest latency** (~5-10ms) by eliminating WiFi overhead. It uses the same TCP protocol as WiFi but over a USB network interface.
 
-> This is a transport-specific document. For general connection information, see [Connection & Authentication](CONNECTION_AUTHENTICATION.md).
-
-## Advantages
-
-- **Lower latency**: ~5-10ms (vs ~16ms WiFi)
-- **Higher reliability**: Wired connection, no wireless interference
-- **No WiFi network required**: Works without WiFi access
+> For protocol details, see [Protocol Docs](MOBILE_PROTOCOL.md).
 
 ## How It Works
 
-USB and WiFi use the **same server implementation**:
+USB creates a network interface between phone and computer:
 
-1. **Server binds to `0.0.0.0:50000`** — listens on ALL network interfaces
-2. **mDNS advertises on ALL interfaces** — phone discovers via `<name>._televoodoo._udp.local.`
-3. **Phone discovers via mDNS** — regardless of connection type (WiFi or USB)
+- **iOS**: Uses Mac's Internet Sharing (bridge interface)
+- **Android**: Uses USB Tethering (phone shares its network)
 
-The QR code only contains:
-- `name`: Service name for mDNS discovery
-- `code`: Authentication code  
-- `transport`: Connection type (`"usb"`)
+The Python server binds to all interfaces (`0.0.0.0`) and broadcasts UDP beacons. The phone discovers the server via beacons, just like WiFi—no special USB handling needed.
 
-No IP address is needed — mDNS handles discovery automatically.
+## iOS Setup (Mac Only)
 
-## When to Use USB
+### Prerequisites
 
-| Scenario | Recommended Transport |
-|----------|----------------------|
-| Low latency critical (force feedback loops) | **USB** |
-| No WiFi network available | **USB** |
-| Wireless interference issues | **USB** |
-| Quick setup, any network | WiFi |
-| No cable available | WiFi or BLE |
+1. **iPhone** connected via USB cable
+2. **Mac** with Internet Sharing enabled
 
----
+### Steps
 
-## Prerequisites
+1. Connect iPhone to Mac via USB
+2. On Mac open **System Settings → General → Sharing**
+3. Enable **Internet Sharing**:
+   - Share from: **Wi-Fi** (or Ethernet)
+   - To: **iPhone USB** (sometimes listed 2 times - select both!)
+4. On iPhone: Disable Personal Hotspot (if enabled)
+5. Run `televoodoo --connection usb`
 
-> ⚠️ **Important**: iOS and Android require **opposite** configurations!
+### Verification
 
-### macOS + iOS
+When connected, the Mac creates a `bridge100` interface:
 
-> **Use macOS Internet Sharing** (Mac shares its network to iPhone via USB).
-> **Do NOT enable** Personal Hotspot/Tethering on iPhone!
-
-| Setting | Required State |
-|---------|----------------|
-| Mac: Internet Sharing | ✅ **Enabled** |
-| iPhone: Personal Hotspot | ❌ **Disabled** |
-
-**Setup Steps:**
-
-1. Connect iPhone to Mac via Lightning/USB-C cable
-2. If prompted on iPhone, tap **Trust** to trust the computer
-3. **Disable Personal Hotspot** on iPhone (Settings → Personal Hotspot → Off)
-4. On Mac, go to **System Settings → General → Sharing**
-5. Click **Internet Sharing** (don't enable yet)
-6. Set **"Share your connection from"** to your internet source (e.g., "Wi-Fi")
-7. Check **"iPhone USB"** under "To computers using"
-8. Enable **Internet Sharing** (toggle it on)
-
-### macOS + Android
-
-> **Use Android USB Tethering** (Android shares its network to Mac via USB).
-> **Do NOT enable** Internet Sharing on Mac!
-
-| Setting | Required State |
-|---------|----------------|
-| Mac: Internet Sharing | ❌ **Disabled** |
-| Android: USB Tethering | ✅ **Enabled** |
-
-**Setup Steps:**
-
-1. **Disable Internet Sharing** on Mac (System Settings → General → Sharing)
-2. Connect phone to Mac via USB cable (data-capable, not charge-only)
-3. Go to **Settings → Network & Internet → Hotspot & Tethering**
-4. Enable **USB Tethering**
-
-### Ubuntu/Linux + Android
-
-1. Connect Android phone via USB cable
-2. Enable **USB Tethering** on phone (Settings → Hotspot & Tethering)
-3. **Disable Wifi** on phone (if PC and phone are in same Wifi network the app will likely prefer to connect via Wifi, not USB)
-
-### Ubuntu/Linux + iOS
-
-⚠️ Requires additional packages:
 ```bash
-sudo apt install libimobiledevice6 usbmuxd
-sudo systemctl start usbmuxd
+ifconfig bridge100
+# Should show an IP like 192.168.2.1
 ```
 
-### Windows + Android
+## Android Setup
 
-1. Connect Android phone via USB cable
-2. **Enable USB Tethering** on phone (Settings → Hotspot & Tethering)
-3. **Disable Wifi** on phone (if PC and phone are in same Wifi network the app will likely prefer to connect via Wifi, not USB)
+### Prerequisites
 
----
+1. **Android phone** with USB Tethering support
+2. **USB cable** (data-capable, not charge-only)
+
+### Steps
+
+1. Connect Android to computer via USB
+2. On Android: **Settings → Network → Hotspot → USB Tethering** → Enable
+3. Run `televoodoo --connection usb`
+
+### Platform-Specific Notes
+
+| Platform | Interface Name |
+|----------|---------------|
+| macOS | Phone name (e.g., "Pixel 9a") |
+| Linux | `usb0` or `enp*` |
+| Windows | Network adapter appears automatically |
 
 ## CLI Usage
 
 ```bash
-# USB connection
+# Explicit USB mode
 televoodoo --connection usb
 
-# USB with static credentials
-televoodoo --connection usb --name myvoodoo --code ABC123
+# With custom ports
+televoodoo --connection usb --tcp-port 51000
 ```
 
----
-
-## Python API
+## Python Usage
 
 ```python
 from televoodoo import start_televoodoo
 
 def on_event(evt):
     if evt.get("type") == "pose":
-        print(f"Pose: {evt['data']}")
+        print(evt["data"]["absolute_input"])
 
-# USB connection
 start_televoodoo(callback=on_event, connection="usb")
-
-# USB with static credentials
-start_televoodoo(
-    callback=on_event,
-    connection="usb",
-    name="myvoodoo",
-    code="ABC123",
-)
 ```
-
----
-
-## QR Code Format
-
-The QR code uses a minimal format with mDNS discovery:
-
-```json
-{
-  "name": "myvoodoo",
-  "code": "ABC123",
-  "transport": "usb"
-}
-```
-
-The phone app uses the `name` to discover the service via mDNS:
-- Service: `myvoodoo._televoodoo._udp.local.`
-
-No IP address is included — mDNS handles discovery on whatever network interface the phone is connected to.
-
----
-
-## Technical Details
-
-### Unified Server Architecture
-
-WiFi and USB use the same server:
-
-```
-┌─────────────────────────────────────────────┐
-│  UDP Server (binds to 0.0.0.0:50000)        │
-│  - Receives packets from any interface      │
-│  - mDNS advertises on all interfaces        │
-└─────────────────────────────────────────────┘
-         │                    │
-         ▼                    ▼
-   ┌──────────┐        ┌──────────────┐
-   │  WiFi    │        │  USB Network │
-   │ Interface│        │  Interface   │
-   └──────────┘        └──────────────┘
-```
-
-### mDNS Discovery
-
-The server advertises via mDNS (Bonjour/Zeroconf):
-- **Service type**: `_televoodoo._udp.local.`
-- **Instance name**: `<name> @ <hostname>._televoodoo._udp.local.`
-- **TXT records**: `v=1`, `port=50000`, `name=<name>`
-
-The phone app discovers the service on whatever network it's connected to (WiFi LAN or USB tethering network).
-
-### Why This Works
-
-Both WiFi and USB tethering create network interfaces:
-- WiFi: Phone and Mac on same LAN
-- USB: Phone and Mac on same point-to-point network
-
-In both cases, mDNS works because the devices are on the same network segment. The server doesn't need to know which interface to use — it listens on all of them.
-
----
-
-## Detecting USB Interfaces
-
-For diagnostics, you can check what USB interfaces are detected:
-
-```python
-from televoodoo.usb import detect_usb_interfaces, is_usb_available
-
-# Check if USB is available
-if is_usb_available():
-    interfaces = detect_usb_interfaces()
-    for iface in interfaces:
-        print(f"Found: {iface.name} ({iface.device})")
-else:
-    print("No USB network interface detected")
-```
-
-On macOS, this detects interfaces by name (e.g., "Pixel 9a", "iPhone USB") rather than IP ranges.
-
----
 
 ## Troubleshooting
 
-### Phone can't discover server
+| Issue | Solution |
+|-------|----------|
+| Phone not detected | Check cable (must be data-capable), try different USB port |
+| iOS: No bridge interface | Enable Internet Sharing, disable iPhone Personal Hotspot |
+| Android: No USB Tethering option | Enable Developer Options, or check carrier restrictions |
+| Server not found | Verify network interface is active with `ifconfig` or `ip addr` |
 
-1. **Verify correct setup** (iOS and Android require **opposite** configurations!):
-   - **iOS**: Mac Internet Sharing = ON, iPhone Personal Hotspot = OFF
-   - **Android**: Mac Internet Sharing = OFF, Android USB Tethering = ON
-2. **Check mDNS**: The server should show `mdns_registered` in its output
-3. **Same network**: Ensure phone and Mac are on the same network segment
+## Latency Comparison
 
-### Server starts but no connection
+| Connection | Typical Latency |
+|------------|-----------------|
+| USB | ~5-10ms |
+| WiFi | ~16ms |
+| BLE | ~32ms |
 
-1. **Check firewall**: Ensure UDP port 50000 is not blocked
-2. **Verify correct setup**: See above — iOS and Android need opposite settings!
-3. **Trust the computer**: On iOS, ensure you've tapped "Trust" when prompted
-
-### Connection drops
-
-1. **Cable issue**: Use a data-capable USB cable (not charge-only)
-2. **Settings changed**: Check that the correct tethering/sharing settings are still enabled
-
----
+USB is recommended for force-feedback applications where latency is critical.
 
 ## See Also
 
-- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — General connection setup
-- **[WiFi API](WIFI_API.md)** — WiFi/UDP protocol details (shared with USB)
-- **[BLE API](BLE_API.md)** — Bluetooth Low Energy connection
+- **[Protocol Docs](MOBILE_PROTOCOL.md)** — Full protocol specification
+- **[Connection & Authentication](CONNECTION_AUTHENTICATION.md)** — QR codes, credentials
+- **[WiFi API](WIFI_API.md)** — Simpler setup alternative
+- **[Haptic Feedback](HAPTIC_FEEDBACK.md)** — Force feedback over USB

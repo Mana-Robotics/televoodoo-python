@@ -172,7 +172,7 @@ Complete examples can be found in `examples/`:
 
 | Document | Description |
 |----------|-------------|
-| **[WiFi API](docs/WIFI_API.md)** | UDP protocol, mDNS discovery (default connection) |
+| **[WiFi API](docs/WIFI_API.md)** | TCP protocol, UDP beacon discovery (default connection) |
 | **[USB API](docs/USB_API.md)** | USB tethering setup, lowest latency option |
 | **[BLE API](docs/BLE_API.md)** | Bluetooth Low Energy service and protocol |
 

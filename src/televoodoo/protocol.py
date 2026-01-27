@@ -9,6 +9,7 @@ BLE messages are sent without framing (each write is a complete message).
 
 from __future__ import annotations
 
+import json
 import struct
 from dataclasses import dataclass
 from enum import IntEnum
@@ -282,7 +283,6 @@ def parse_config(data: bytes) -> Optional[ConfigMsg]:
     if len(data) < CONFIG_HEADER_SIZE:
         return None
     try:
-        import json
         magic, msg_type, version, config_len = struct.unpack(CONFIG_HEADER_FORMAT, data[:CONFIG_HEADER_SIZE])
         if magic != MAGIC or msg_type != MsgType.CONFIG:
             return None
@@ -395,7 +395,6 @@ def pack_config(config: Dict[str, Any]) -> bytes:
     Returns:
         CONFIG message bytes (8 + config_len bytes)
     """
-    import json
     config_json = json.dumps(config, separators=(',', ':')).encode('utf-8')
     config_len = len(config_json)
     header = struct.pack(CONFIG_HEADER_FORMAT, MAGIC, MsgType.CONFIG, PROTOCOL_VERSION, config_len)
