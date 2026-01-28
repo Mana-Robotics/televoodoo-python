@@ -10,7 +10,7 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
-from televoodoo import start_televoodoo, PoseProvider, load_config
+from televoodoo import start_televoodoo, stop_televoodoo, PoseProvider, load_config
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--samples", type=int, default=100, help="Number of samples")
@@ -339,12 +339,13 @@ def save_and_exit(timestamps_list: list, deltas_ms: list, poses_list: list, raw_
             save_pose_deltas_csv(poses_list, pose_deltas, timestamp_str, args.use_delta)
             save_pose_deltas_plot(pose_deltas, timestamp_str, args.use_delta)
     
-    # Exit based on connection type
+    # Gracefully stop the server and exit
+    stop_televoodoo()
     if CF:
-        # macOS BLE: stop the run loop gracefully
+        # macOS BLE: also stop the run loop
         CF.CFRunLoopStop(CF.CFRunLoopGetMain())
     else:
-        # WIFI or Linux: force exit since server blocks
+        # WiFi/USB or Linux: exit normally
         os._exit(0)
 
 

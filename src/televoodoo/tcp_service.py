@@ -625,6 +625,12 @@ class TcpServer:
         if self.session is not None:
             client_str = f"{self.session.addr[0]}:{self.session.addr[1]}"
             try:
+                # Send BYE message to notify client before closing
+                bye_payload = protocol.pack_bye(self.session.session_id)
+                self._send_message(self.session.conn, bye_payload)
+            except Exception:
+                pass
+            try:
                 self.session.conn.close()
             except Exception:
                 pass
@@ -790,3 +796,18 @@ def send_config(config: Dict[str, Any]) -> bool:
         return server.send_config(config)
     
     return False
+
+
+def stop_televoodoo() -> None:
+    """Gracefully stop the Televoodoo server.
+    
+    This properly closes the connection and notifies the connected phone app
+    that the session has ended. Use this instead of os._exit() for clean shutdown.
+    
+    This function is thread-safe and can be called from any thread.
+    """
+    with _server_lock:
+        server = _active_server
+    
+    if server is not None:
+        server.stop()

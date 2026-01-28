@@ -17,13 +17,14 @@ from .resampler import PoseResampler
 from .motion_limiter import MotionLimiter
 from .connection import start_televoodoo
 from .session import generate_credentials, print_session_qr
-from .tcp_service import send_haptic, send_config
+from .tcp_service import send_haptic, send_config, stop_televoodoo
 from . import math
 from . import protocol
 
 __all__ = [
     # Main API
     "start_televoodoo",
+    "stop_televoodoo",
     "send_haptic",
     "send_config",
     "PoseProvider",
